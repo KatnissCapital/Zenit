@@ -239,6 +239,7 @@ const euro = new Intl.NumberFormat("es-ES", {
 });
 
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeView, setActiveView] = useState("Dashboard");
   const [selectedId, setSelectedId] = useState(properties[0].id);
   const selected = properties.find((property) => property.id === selectedId) ?? properties[0];
@@ -275,6 +276,53 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#f7f8f5] text-[#17211c]">
+      {!isAuthenticated ? (
+        <section className="login-shell" aria-label="Acceso a Katniss Real Estate">
+          <div className="login-panel">
+            <div className="brand-block">
+              <div className="brand-mark">K</div>
+              <div>
+                <p className="eyebrow">Katniss</p>
+                <h1>Real Estate</h1>
+              </div>
+            </div>
+
+            <div className="login-copy">
+              <span className="security-pill">Demo protegida</span>
+              <h2>Accede a tu cartera inmobiliaria con control documental.</h2>
+              <p>
+                El siguiente paso separa la demo publica de los expedientes: contratos,
+                seguros, IBI, financiacion y documentos de Drive quedan dentro del area
+                privada.
+              </p>
+            </div>
+
+            <div className="login-checks">
+              <span>Drive vinculado</span>
+              <span>Documentos sensibles aislados</span>
+              <span>Preparado para usuarios y roles</span>
+            </div>
+
+            <button className="login-button" onClick={() => setIsAuthenticated(true)}>
+              Entrar a la demo
+            </button>
+          </div>
+
+          <aside className="login-preview">
+            <div>
+              <p className="eyebrow">Vista privada</p>
+              <h3>Dashboard, inmuebles e indice documental.</h3>
+            </div>
+            <div className="login-preview-grid">
+              <Metric label="Valor cartera" value={euro.format(totals.value)} trend="Privado" />
+              <Metric label="Docs sensibles" value={`${documentTotals.locked}`} trend="Login" />
+              <Metric label="Pendientes" value={`${documentTotals.pending}`} trend="Accion" />
+              <Metric label="Costes anuales" value={euro.format(totals.annualCosts)} trend="Control" />
+            </div>
+          </aside>
+        </section>
+      ) : (
+      <>
       <div className="app-shell">
         <aside className="sidebar" aria-label="Navegacion principal">
           <div className="brand-block">
@@ -312,10 +360,17 @@ export default function Home() {
               <h2>{activeView}</h2>
             </div>
             <div className="topbar-actions">
+              <div className="user-badge">
+                <span>Sesion demo</span>
+                <strong>KatnissCapital</strong>
+              </div>
               <label className="search-box">
                 <span>Buscar</span>
                 <input placeholder="Inmueble, contrato, factura..." />
               </label>
+              <button className="secondary-action" onClick={() => setIsAuthenticated(false)}>
+                Salir
+              </button>
               <button className="primary-action">Subir documento</button>
             </div>
           </header>
@@ -595,6 +650,8 @@ export default function Home() {
           </button>
         ))}
       </nav>
+      </>
+      )}
     </main>
   );
 }

@@ -11,6 +11,7 @@ Demo funcional de una aplicacion web responsive/PWA para gestionar una cartera i
 - Control economico por inmueble: seguro de vivienda, IBI, basuras, comunidad,
   seguro de alquiler, financiacion y suministros asumidos por inquilino.
 - Vista de indice documental por inmueble con carpeta Drive, checklist y estados.
+- Pantalla de acceso demo para separar la vista publica de expedientes sensibles.
 - Alertas iniciales para revisiones de renta, documentos y facturas.
 - Base preparada para crecer hacia usuarios, Google Drive, Catastro, INE, OCR y repositorio documental.
 
@@ -19,5 +20,6 @@ Demo funcional de una aplicacion web responsive/PWA para gestionar una cartera i
 - Bandeja completa de alertas y documentos.
 - Alta y edicion de inmuebles, contratos, facturas e incidencias.
 - Persistencia de datos y autenticacion.
+- Sustituir el acceso demo por autenticacion real con usuarios y roles.
 - Integracion documental con Google Drive.
 - Reglas parametrizadas para IPC/IRAV y evidencia de calculo.
