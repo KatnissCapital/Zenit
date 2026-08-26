@@ -41,12 +41,18 @@ body {
 }
 
 button,
-input {
+input,
+a {
   font: inherit;
 }
 
 button {
   cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 .app-shell {
@@ -673,6 +679,33 @@ h3 {
   font-size: 13px;
   font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.drive-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.drive-actions a,
+.drive-actions button {
+  display: grid;
+  min-height: 40px;
+  place-items: center;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.drive-actions a {
+  background: var(--ink);
+  color: white;
+}
+
+.drive-actions button {
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink);
 }
 
 .drive-checks {

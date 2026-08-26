@@ -169,8 +169,11 @@ const financialRows = [
   ["Vacancia prevista", "5,5%", "-1,1 pp"],
 ];
 
+const driveRootUrl =
+  "https://drive.google.com/drive/folders/1IIVJkg4ZqdLXN81cKrYaRE3Ofp_ZTkOp";
+
 const driveChecklist = [
-  ["Carpeta raiz", "Pendiente de vincular"],
+  ["Carpeta raiz", "Vinculada"],
   ["Estructura ordenada", "Confirmada"],
   ["Indice documental", "Siguiente paso"],
   ["Datos sensibles", "Requiere login"],
@@ -395,9 +398,15 @@ export default function Home() {
               <section className="drive-panel">
                 <div>
                   <p className="eyebrow">Google Drive</p>
-                  <h3>Preparado para datos reales</h3>
+                  <h3>Carpeta raiz vinculada</h3>
                 </div>
                 <p>{selected.driveFolder}</p>
+                <div className="drive-actions">
+                  <a href={driveRootUrl} target="_blank" rel="noreferrer">
+                    Abrir Drive
+                  </a>
+                  <button>Preparar indice</button>
+                </div>
                 <div className="drive-checks">
                   {driveChecklist.map(([label, state]) => (
                     <div key={label}>
