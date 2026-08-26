@@ -65,6 +65,8 @@ type PortfolioResponse = {
   };
 };
 
+type UserRole = "Administrador" | "Gestor" | "Financiero" | "Auditor" | "Invitado";
+
 const properties: Property[] = [
   {
     id: "MAD-014",
@@ -262,6 +264,7 @@ const roleRows = [
   ["Gestor", "Inmuebles, contratos, documentos e incidencias", "Edicion"],
   ["Financiero", "Facturas, financiacion, rentabilidad e informes", "Validacion"],
   ["Auditor", "Expedientes, evidencias y trazabilidad", "Solo lectura"],
+  ["Invitado", "Vista de cartera y documentos con importes ocultos", "Importes ocultos"],
 ];
 
 const storageRows = [
@@ -272,6 +275,7 @@ const storageRows = [
 ];
 
 const navigation = ["Dashboard", "Inmuebles", "Documentos", "Acciones", "Finanzas", "Mercado", "Configuracion"];
+const userRoles: UserRole[] = ["Administrador", "Gestor", "Financiero", "Auditor", "Invitado"];
 
 const euro = new Intl.NumberFormat("es-ES", {
   style: "currency",
@@ -282,6 +286,7 @@ const euro = new Intl.NumberFormat("es-ES", {
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeView, setActiveView] = useState("Dashboard");
+  const [activeRole, setActiveRole] = useState<UserRole>("Administrador");
   const [portfolio, setPortfolio] = useState<Property[]>(properties);
   const [documentsByProperty, setDocumentsByProperty] = useState(documentRequirements);
   const [selectedId, setSelectedId] = useState(properties[0].id);
@@ -303,6 +308,13 @@ export default function Home() {
   ]);
   const [syncState, setSyncState] = useState("Pendiente de cargar");
   const [isSaving, setIsSaving] = useState(false);
+  const hideAmounts = activeRole === "Invitado";
+  const visibleNavigation = hideAmounts
+    ? navigation.filter((item) => item !== "Acciones")
+    : navigation;
+  const mobileNavigation = hideAmounts
+    ? ["Dashboard", "Inmuebles", "Documentos", "Finanzas"]
+    : ["Dashboard", "Inmuebles", "Documentos", "Acciones"];
   const selected = portfolio.find((property) => property.id === selectedId) ?? portfolio[0];
   const selectedDocuments = documentsByProperty[selected.id] ?? [];
   const selectedAnnualCosts = Object.values(selected.annualCosts).reduce(
@@ -334,6 +346,18 @@ export default function Home() {
       locked: allDocuments.filter((document) => document.status === "locked").length,
     };
   }, [documentsByProperty, portfolio]);
+
+  const amount = (value: number) => (hideAmounts ? "Importe oculto" : euro.format(value));
+  const rate = (value: number) => (hideAmounts ? "Importe oculto" : `${value}%`);
+  const trend = (value: string) => (hideAmounts && /[0-9]|EUR|€/.test(value) ? "Oculto" : value);
+
+  const changeRole = (role: UserRole) => {
+    setActiveRole(role);
+
+    if (role === "Invitado" && activeView === "Acciones") {
+      setActiveView("Dashboard");
+    }
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -595,7 +619,7 @@ export default function Home() {
           </div>
 
           <nav className="nav-list">
-            {navigation.map((item) => (
+            {visibleNavigation.map((item) => (
               <button
                 key={item}
                 className={item === activeView ? "nav-item active" : "nav-item"}
@@ -607,11 +631,13 @@ export default function Home() {
             ))}
           </nav>
 
-          <div className="sidebar-panel">
-            <span className="panel-icon">+</span>
-            <p>Alta rapida</p>
-            <button>Nuevo inmueble</button>
-          </div>
+          {!hideAmounts && (
+            <div className="sidebar-panel">
+              <span className="panel-icon">+</span>
+              <p>Alta rapida</p>
+              <button onClick={() => setActiveView("Acciones")}>Nuevo inmueble</button>
+            </div>
+          )}
         </aside>
 
         <section className="workspace">
@@ -623,8 +649,21 @@ export default function Home() {
             <div className="topbar-actions">
               <div className="user-badge">
                 <span>{syncState}</span>
-                <strong>KatnissCapital</strong>
+                <strong>{activeRole}</strong>
               </div>
+              <label className="profile-select">
+                <span>Perfil</span>
+                <select
+                  value={activeRole}
+                  onChange={(event) => changeRole(event.target.value as UserRole)}
+                >
+                  {userRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="search-box">
                 <span>Buscar</span>
                 <input placeholder="Inmueble, contrato, factura..." />
@@ -632,9 +671,11 @@ export default function Home() {
               <button className="secondary-action" onClick={() => setIsAuthenticated(false)}>
                 Salir
               </button>
-              <button className="primary-action" onClick={() => setActiveView("Acciones")}>
-                Subir documento
-              </button>
+              {!hideAmounts && (
+                <button className="primary-action" onClick={() => setActiveView("Acciones")}>
+                  Subir documento
+                </button>
+              )}
             </div>
           </header>
 
@@ -648,10 +689,10 @@ export default function Home() {
               </p>
             </div>
             <div className="hero-metrics">
-              <Metric label="Valor cartera" value={euro.format(totals.value)} trend="+3,1%" />
-              <Metric label="Renta mensual" value={euro.format(totals.rent)} trend="+4,2%" />
-              <Metric label="Cash flow" value={euro.format(totals.cashflow)} trend="+310 EUR" />
-              <Metric label="Costes anuales" value={euro.format(totals.annualCosts)} trend="Incluye deuda" />
+              <Metric label="Valor cartera" value={amount(totals.value)} trend={trend("+3,1%")} />
+              <Metric label="Renta mensual" value={amount(totals.rent)} trend={trend("+4,2%")} />
+              <Metric label="Cash flow" value={amount(totals.cashflow)} trend={trend("+310 EUR")} />
+              <Metric label="Costes anuales" value={amount(totals.annualCosts)} trend="Incluye deuda" />
             </div>
           </section>
 
@@ -995,11 +1036,11 @@ export default function Home() {
                     </div>
                     <div className="property-stat">
                       <span>Renta</span>
-                      <strong>{euro.format(property.rent)}</strong>
+                      <strong>{amount(property.rent)}</strong>
                     </div>
                     <div className="property-stat">
                       <span>Neta</span>
-                      <strong>{property.yieldNet}%</strong>
+                      <strong>{rate(property.yieldNet)}</strong>
                     </div>
                     <div className="property-stat">
                       <span>Documentos</span>
@@ -1021,8 +1062,8 @@ export default function Home() {
                   {financialRows.map(([label, value, trend]) => (
                     <div key={label} className="finance-item">
                       <span>{label}</span>
-                      <strong>{value}</strong>
-                      <small>{trend}</small>
+                      <strong>{hideAmounts ? "Importe oculto" : value}</strong>
+                      <small>{hideAmounts ? "Oculto" : trend}</small>
                     </div>
                   ))}
                 </div>
@@ -1049,20 +1090,20 @@ export default function Home() {
                   <Detail label="Inquilino" value={selected.tenant} />
                   <Detail label="Revision" value={selected.nextReview} />
                   <Detail label="Riesgo" value={selected.risk} />
-                  <Detail label="Cash flow" value={euro.format(selected.cashflow)} />
+                  <Detail label="Cash flow" value={amount(selected.cashflow)} />
                 </div>
 
                 <section className="cost-panel" aria-label="Costes reales del inmueble">
                   <div className="cost-total">
                     <span>Costes anuales controlados</span>
-                    <strong>{euro.format(selectedAnnualCosts)}</strong>
+                    <strong>{amount(selectedAnnualCosts)}</strong>
                   </div>
-                  <Cost label="Seguro vivienda" value={selected.annualCosts.homeInsurance} />
-                  <Cost label="IBI" value={selected.annualCosts.ibi} />
-                  <Cost label="Basuras" value={selected.annualCosts.wasteTax} />
-                  <Cost label="Comunidad" value={selected.annualCosts.community} />
-                  <Cost label="Seguro alquiler" value={selected.annualCosts.rentInsurance} />
-                  <Cost label="Financiacion" value={selected.annualCosts.financing} />
+                  <Cost label="Seguro vivienda" value={selected.annualCosts.homeInsurance} hideAmounts={hideAmounts} />
+                  <Cost label="IBI" value={selected.annualCosts.ibi} hideAmounts={hideAmounts} />
+                  <Cost label="Basuras" value={selected.annualCosts.wasteTax} hideAmounts={hideAmounts} />
+                  <Cost label="Comunidad" value={selected.annualCosts.community} hideAmounts={hideAmounts} />
+                  <Cost label="Seguro alquiler" value={selected.annualCosts.rentInsurance} hideAmounts={hideAmounts} />
+                  <Cost label="Financiacion" value={selected.annualCosts.financing} hideAmounts={hideAmounts} />
                   <div className={selected.utilitiesAssumedByTenant ? "utility-ok" : "utility-risk"}>
                     <span>Suministros</span>
                     <strong>
@@ -1133,7 +1174,7 @@ export default function Home() {
       </div>
 
       <nav className="mobile-nav" aria-label="Navegacion movil">
-        {["Dashboard", "Inmuebles", "Documentos", "Acciones"].map((item) => (
+        {mobileNavigation.map((item) => (
           <button
             key={item}
             className={item === activeView ? "active" : ""}
@@ -1169,11 +1210,19 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Cost({ label, value }: { label: string; value: number }) {
+function Cost({
+  label,
+  value,
+  hideAmounts,
+}: {
+  label: string;
+  value: number;
+  hideAmounts: boolean;
+}) {
   return (
     <div className="cost-row">
       <span>{label}</span>
-      <strong>{value > 0 ? euro.format(value) : "No consta"}</strong>
+      <strong>{hideAmounts ? "Importe oculto" : value > 0 ? euro.format(value) : "No consta"}</strong>
     </div>
   );
 }

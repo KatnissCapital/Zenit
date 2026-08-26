@@ -14,7 +14,8 @@ Demo funcional de una aplicacion web responsive/PWA para gestionar una cartera i
 - Pantalla de acciones para alta de inmuebles y registro de controles
   documentales con escritura en D1.
 - Pantalla de acceso demo para separar la vista publica de expedientes sensibles.
-- Configuracion inicial de roles: administrador, gestor, financiero y auditor.
+- Configuracion inicial de roles: administrador, gestor, financiero, auditor e
+  invitado con importes ocultos.
 - Base de datos D1 activa con migracion inicial para usuarios, inmuebles,
   contratos, costes, documentos, alertas y auditoria.
 - Alertas iniciales para revisiones de renta, documentos y facturas.

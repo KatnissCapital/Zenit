@@ -328,16 +328,25 @@ h3 {
   gap: 12px;
 }
 
-.search-box {
+.search-box,
+.profile-select {
   display: grid;
   gap: 4px;
-  min-width: 320px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
-.search-box input {
+.search-box {
+  min-width: 320px;
+}
+
+.profile-select {
+  min-width: 142px;
+}
+
+.search-box input,
+.profile-select select {
   height: 42px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -345,6 +354,11 @@ h3 {
   color: var(--ink);
   padding: 0 14px;
   outline: none;
+}
+
+.profile-select select {
+  cursor: pointer;
+  font-weight: 800;
 }
 
 .primary-action {
@@ -1408,6 +1422,7 @@ h3 {
 
   .topbar-actions,
   .search-box,
+  .profile-select,
   .primary-action,
   .secondary-action,
   .user-badge {
