@@ -1,0 +1,17 @@
+{
+  "name": "Katniss Real Estate",
+  "short_name": "Katniss",
+  "description": "Gestion visual de cartera inmobiliaria, contratos, documentos y rentabilidad.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#17211c",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
