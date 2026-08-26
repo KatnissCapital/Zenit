@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 
 type Property = {
   id: string;
@@ -36,6 +36,21 @@ type DocumentRequirement = {
   label: string;
   status: DocumentStatus;
   detail: string;
+};
+
+type PropertyForm = {
+  name: string;
+  address: string;
+  rent: string;
+  value: string;
+  driveFolder: string;
+};
+
+type DocumentForm = {
+  propertyId: string;
+  label: string;
+  detail: string;
+  status: DocumentStatus;
 };
 
 const properties: Property[] = [
@@ -244,7 +259,7 @@ const storageRows = [
   ["Documentos sensibles", "Metadatos primero", "Sin copiar archivos"],
 ];
 
-const navigation = ["Dashboard", "Inmuebles", "Documentos", "Finanzas", "Mercado", "Configuracion"];
+const navigation = ["Dashboard", "Inmuebles", "Documentos", "Acciones", "Finanzas", "Mercado", "Configuracion"];
 
 const euro = new Intl.NumberFormat("es-ES", {
   style: "currency",
@@ -255,30 +270,48 @@ const euro = new Intl.NumberFormat("es-ES", {
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeView, setActiveView] = useState("Dashboard");
+  const [portfolio, setPortfolio] = useState<Property[]>(properties);
+  const [documentsByProperty, setDocumentsByProperty] = useState(documentRequirements);
   const [selectedId, setSelectedId] = useState(properties[0].id);
-  const selected = properties.find((property) => property.id === selectedId) ?? properties[0];
-  const selectedDocuments = documentRequirements[selected.id] ?? [];
+  const [propertyForm, setPropertyForm] = useState<PropertyForm>({
+    name: "",
+    address: "",
+    rent: "",
+    value: "",
+    driveFolder: "",
+  });
+  const [documentForm, setDocumentForm] = useState<DocumentForm>({
+    propertyId: properties[0].id,
+    label: "Seguro vivienda",
+    detail: "",
+    status: "review",
+  });
+  const [actionLog, setActionLog] = useState<string[]>([
+    "Base de datos preparada para persistir altas y documentos.",
+  ]);
+  const selected = portfolio.find((property) => property.id === selectedId) ?? portfolio[0];
+  const selectedDocuments = documentsByProperty[selected.id] ?? [];
   const selectedAnnualCosts = Object.values(selected.annualCosts).reduce(
     (sum, value) => sum + value,
     0,
   );
 
   const totals = useMemo(() => {
-    const rent = properties.reduce((sum, property) => sum + property.rent, 0);
-    const value = properties.reduce((sum, property) => sum + property.value, 0);
-    const cashflow = properties.reduce((sum, property) => sum + property.cashflow, 0);
-    const pendingDocs = properties.reduce((sum, property) => sum + property.pendingDocs, 0);
-    const annualCosts = properties.reduce(
+    const rent = portfolio.reduce((sum, property) => sum + property.rent, 0);
+    const value = portfolio.reduce((sum, property) => sum + property.value, 0);
+    const cashflow = portfolio.reduce((sum, property) => sum + property.cashflow, 0);
+    const pendingDocs = portfolio.reduce((sum, property) => sum + property.pendingDocs, 0);
+    const annualCosts = portfolio.reduce(
       (sum, property) =>
         sum + Object.values(property.annualCosts).reduce((costs, value) => costs + value, 0),
       0,
     );
 
     return { rent, value, cashflow, pendingDocs, annualCosts };
-  }, []);
+  }, [portfolio]);
 
   const documentTotals = useMemo(() => {
-    const allDocuments = properties.flatMap((property) => documentRequirements[property.id] ?? []);
+    const allDocuments = portfolio.flatMap((property) => documentsByProperty[property.id] ?? []);
 
     return {
       ok: allDocuments.filter((document) => document.status === "ok").length,
@@ -286,7 +319,82 @@ export default function Home() {
       review: allDocuments.filter((document) => document.status === "review").length,
       locked: allDocuments.filter((document) => document.status === "locked").length,
     };
-  }, []);
+  }, [documentsByProperty, portfolio]);
+
+  const addProperty = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextIndex = portfolio.length + 1;
+    const rent = Number(propertyForm.rent || 0);
+    const value = Number(propertyForm.value || 0);
+    const id = `NEW-${String(nextIndex).padStart(3, "0")}`;
+    const newProperty: Property = {
+      id,
+      name: propertyForm.name || `Nuevo inmueble ${nextIndex}`,
+      address: propertyForm.address || "Direccion pendiente",
+      type: "Residencial",
+      status: "En alta",
+      tenant: "Pendiente",
+      rent,
+      yieldNet: value > 0 ? Number((((rent * 12) / value) * 100).toFixed(1)) : 0,
+      cashflow: Math.max(0, Math.round(rent * 0.42)),
+      documents: 12,
+      pendingDocs: 7,
+      nextReview: "Pendiente",
+      risk: "Medio",
+      value,
+      annualCosts: {
+        homeInsurance: 0,
+        ibi: 0,
+        wasteTax: 0,
+        community: 0,
+        rentInsurance: 0,
+        financing: 0,
+      },
+      utilitiesAssumedByTenant: false,
+      driveFolder: propertyForm.driveFolder || `Drive / ${id}`,
+      tags: ["Alta pendiente", "Checklist generado"],
+    };
+
+    setPortfolio((current) => [...current, newProperty]);
+    setDocumentsByProperty((current) => ({
+      ...current,
+      [id]: [
+        { label: "Contrato alquiler", status: "pending", detail: "Pendiente de cargar" },
+        { label: "Seguro vivienda", status: "pending", detail: "Pendiente de cargar" },
+        { label: "IBI", status: "pending", detail: "Pendiente de cargar" },
+        { label: "Basuras", status: "pending", detail: "Pendiente de cargar" },
+        { label: "Comunidad", status: "pending", detail: "Pendiente de cargar" },
+        { label: "Seguro alquiler", status: "pending", detail: "Pendiente de confirmar" },
+        { label: "Suministros", status: "review", detail: "Confirmar titularidad" },
+        { label: "Financiacion", status: "locked", detail: "Requiere login" },
+      ],
+    }));
+    setSelectedId(id);
+    setDocumentForm((current) => ({ ...current, propertyId: id }));
+    setPropertyForm({ name: "", address: "", rent: "", value: "", driveFolder: "" });
+    setActionLog((current) => [`Inmueble ${id} creado en la sesion demo.`, ...current]);
+  };
+
+  const addDocument = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const targetId = documentForm.propertyId;
+    const newDocument: DocumentRequirement = {
+      label: documentForm.label || "Documento",
+      status: documentForm.status,
+      detail: documentForm.detail || "Pendiente de revisar metadatos",
+    };
+
+    setDocumentsByProperty((current) => ({
+      ...current,
+      [targetId]: [...(current[targetId] ?? []), newDocument],
+    }));
+    setSelectedId(targetId);
+    setDocumentForm((current) => ({ ...current, detail: "" }));
+    setActionLog((current) => [
+      `Documento "${newDocument.label}" registrado para ${targetId}.`,
+      ...current,
+    ]);
+  };
 
   return (
     <main className="min-h-screen bg-[#f7f8f5] text-[#17211c]">
@@ -385,14 +493,16 @@ export default function Home() {
               <button className="secondary-action" onClick={() => setIsAuthenticated(false)}>
                 Salir
               </button>
-              <button className="primary-action">Subir documento</button>
+              <button className="primary-action" onClick={() => setActiveView("Acciones")}>
+                Subir documento
+              </button>
             </div>
           </header>
 
           <section className="hero-band" aria-label="Resumen de cartera">
             <div className="hero-copy">
               <p className="eyebrow">Cartera activa</p>
-              <h3>4 activos, trazabilidad documental y rentabilidad en una vista.</h3>
+              <h3>{portfolio.length} activos, trazabilidad documental y rentabilidad en una vista.</h3>
               <p>
                 Controla contratos, vencimientos, facturas e incidencias desde un panel
                 preparado para crecer hacia integraciones con Drive, Catastro, INE e Idealista.
@@ -426,8 +536,8 @@ export default function Home() {
               </div>
 
               <div className="document-matrix">
-                {properties.map((property) => {
-                  const documents = documentRequirements[property.id] ?? [];
+                {portfolio.map((property) => {
+                  const documents = documentsByProperty[property.id] ?? [];
                   const pendingCount = documents.filter(
                     (document) => document.status === "pending" || document.status === "review",
                   ).length;
@@ -534,7 +644,184 @@ export default function Home() {
             </section>
           )}
 
-          {activeView !== "Configuracion" && (
+          {activeView === "Acciones" && (
+            <section className="actions-view" aria-label="Acciones de cartera">
+              <div className="actions-hero">
+                <div>
+                  <p className="eyebrow">Operativa</p>
+                  <h3>Altas y documentos listos para conectar a la base de datos.</h3>
+                </div>
+                <span>{portfolio.length} inmuebles en cartera</span>
+              </div>
+
+              <div className="actions-grid">
+                <form className="action-form" onSubmit={addProperty}>
+                  <div>
+                    <p className="eyebrow">Nuevo inmueble</p>
+                    <h3>Crear ficha</h3>
+                  </div>
+
+                  <label>
+                    <span>Nombre</span>
+                    <input
+                      value={propertyForm.name}
+                      onChange={(event) =>
+                        setPropertyForm((current) => ({ ...current, name: event.target.value }))
+                      }
+                      placeholder="Piso Centro"
+                    />
+                  </label>
+
+                  <label>
+                    <span>Direccion</span>
+                    <input
+                      value={propertyForm.address}
+                      onChange={(event) =>
+                        setPropertyForm((current) => ({ ...current, address: event.target.value }))
+                      }
+                      placeholder="Calle, ciudad"
+                    />
+                  </label>
+
+                  <div className="form-pair">
+                    <label>
+                      <span>Renta mensual</span>
+                      <input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={propertyForm.rent}
+                        onChange={(event) =>
+                          setPropertyForm((current) => ({ ...current, rent: event.target.value }))
+                        }
+                        placeholder="950"
+                      />
+                    </label>
+                    <label>
+                      <span>Valor estimado</span>
+                      <input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={propertyForm.value}
+                        onChange={(event) =>
+                          setPropertyForm((current) => ({ ...current, value: event.target.value }))
+                        }
+                        placeholder="210000"
+                      />
+                    </label>
+                  </div>
+
+                  <label>
+                    <span>Carpeta Drive</span>
+                    <input
+                      value={propertyForm.driveFolder}
+                      onChange={(event) =>
+                        setPropertyForm((current) => ({
+                          ...current,
+                          driveFolder: event.target.value,
+                        }))
+                      }
+                      placeholder="Drive / Inmuebles / Piso Centro"
+                    />
+                  </label>
+
+                  <button type="submit">Crear inmueble</button>
+                </form>
+
+                <form className="action-form" onSubmit={addDocument}>
+                  <div>
+                    <p className="eyebrow">Documento</p>
+                    <h3>Registrar control</h3>
+                  </div>
+
+                  <label>
+                    <span>Inmueble</span>
+                    <select
+                      value={documentForm.propertyId}
+                      onChange={(event) =>
+                        setDocumentForm((current) => ({
+                          ...current,
+                          propertyId: event.target.value,
+                        }))
+                      }
+                    >
+                      {portfolio.map((property) => (
+                        <option key={property.id} value={property.id}>
+                          {property.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Tipo documental</span>
+                    <select
+                      value={documentForm.label}
+                      onChange={(event) =>
+                        setDocumentForm((current) => ({ ...current, label: event.target.value }))
+                      }
+                    >
+                      <option>Seguro vivienda</option>
+                      <option>IBI</option>
+                      <option>Basuras</option>
+                      <option>Suministros</option>
+                      <option>Comunidad</option>
+                      <option>Seguro alquiler</option>
+                      <option>Financiacion</option>
+                      <option>Contrato alquiler</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Estado</span>
+                    <select
+                      value={documentForm.status}
+                      onChange={(event) =>
+                        setDocumentForm((current) => ({
+                          ...current,
+                          status: event.target.value as DocumentStatus,
+                        }))
+                      }
+                    >
+                      <option value="ok">Completo</option>
+                      <option value="pending">Pendiente</option>
+                      <option value="review">Revisar</option>
+                      <option value="locked">Sensible</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Detalle</span>
+                    <input
+                      value={documentForm.detail}
+                      onChange={(event) =>
+                        setDocumentForm((current) => ({ ...current, detail: event.target.value }))
+                      }
+                      placeholder="Poliza 2026 cargada en Drive"
+                    />
+                  </label>
+
+                  <button type="submit">Registrar documento</button>
+                </form>
+              </div>
+
+              <section className="action-log" aria-label="Registro de actividad">
+                <div>
+                  <p className="eyebrow">Actividad</p>
+                  <h3>Ultimas acciones</h3>
+                </div>
+                {actionLog.map((item) => (
+                  <article key={item}>
+                    <span />
+                    <p>{item}</p>
+                  </article>
+                ))}
+              </section>
+            </section>
+          )}
+
+          {activeView !== "Configuracion" && activeView !== "Acciones" && (
           <section className="content-grid">
             <div className="main-column">
               <section className="section-head">
@@ -550,7 +837,7 @@ export default function Home() {
               </section>
 
               <div className="property-list">
-                {properties.map((property) => (
+                {portfolio.map((property) => (
                   <button
                     key={property.id}
                     className={property.id === selected.id ? "property-row selected" : "property-row"}
@@ -703,11 +990,11 @@ export default function Home() {
       </div>
 
       <nav className="mobile-nav" aria-label="Navegacion movil">
-        {["Dashboard", "Inmuebles", "Alertas", "Mas"].map((item) => (
+        {["Dashboard", "Inmuebles", "Documentos", "Acciones"].map((item) => (
           <button
             key={item}
             className={item === activeView ? "active" : ""}
-            onClick={() => setActiveView(item === "Mas" ? "Documentos" : item)}
+            onClick={() => setActiveView(item)}
           >
             <span />
             {item}
