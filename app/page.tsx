@@ -230,7 +230,21 @@ const documentRequirements: Record<string, DocumentRequirement[]> = {
   ],
 };
 
-const navigation = ["Dashboard", "Inmuebles", "Documentos", "Finanzas", "Mercado"];
+const roleRows = [
+  ["Administrador", "Usuarios, reglas, integraciones y auditoria", "Completo"],
+  ["Gestor", "Inmuebles, contratos, documentos e incidencias", "Edicion"],
+  ["Financiero", "Facturas, financiacion, rentabilidad e informes", "Validacion"],
+  ["Auditor", "Expedientes, evidencias y trazabilidad", "Solo lectura"],
+];
+
+const storageRows = [
+  ["Base de datos", "D1 / DB", "Declarada"],
+  ["Migracion inicial", "8 tablas e indices", "Versionada"],
+  ["Drive", "Carpeta raiz vinculada", "Pendiente API"],
+  ["Documentos sensibles", "Metadatos primero", "Sin copiar archivos"],
+];
+
+const navigation = ["Dashboard", "Inmuebles", "Documentos", "Finanzas", "Mercado", "Configuracion"];
 
 const euro = new Intl.NumberFormat("es-ES", {
   style: "currency",
@@ -472,6 +486,55 @@ export default function Home() {
             </section>
           )}
 
+          {activeView === "Configuracion" && (
+            <section className="settings-view" aria-label="Configuracion de seguridad y datos">
+              <div className="settings-hero">
+                <div>
+                  <p className="eyebrow">Base de producto</p>
+                  <h3>Usuarios, roles y datos persistentes preparados para la siguiente fase.</h3>
+                </div>
+                <span>DB activa en despliegue</span>
+              </div>
+
+              <div className="settings-grid">
+                <section className="settings-panel">
+                  <div>
+                    <p className="eyebrow">Permisos</p>
+                    <h3>Roles previstos</h3>
+                  </div>
+                  <div className="role-list">
+                    {roleRows.map(([role, scope, access]) => (
+                      <article key={role}>
+                        <strong>{role}</strong>
+                        <p>{scope}</p>
+                        <span>{access}</span>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="settings-panel">
+                  <div>
+                    <p className="eyebrow">Persistencia</p>
+                    <h3>Estado tecnico</h3>
+                  </div>
+                  <div className="storage-list">
+                    {storageRows.map(([label, detail, state]) => (
+                      <article key={label}>
+                        <div>
+                          <strong>{label}</strong>
+                          <p>{detail}</p>
+                        </div>
+                        <span>{state}</span>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </section>
+          )}
+
+          {activeView !== "Configuracion" && (
           <section className="content-grid">
             <div className="main-column">
               <section className="section-head">
@@ -635,6 +698,7 @@ export default function Home() {
               </section>
             </aside>
           </section>
+          )}
         </section>
       </div>
 
