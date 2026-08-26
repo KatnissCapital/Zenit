@@ -61,6 +61,25 @@ type DocumentInput = {
   status?: DocumentStatus;
 };
 
+type ImportPropertyInput = {
+  name?: string;
+  address?: string;
+  type?: string;
+  status?: string;
+  tenant?: string;
+  rent?: number;
+  value?: number;
+  homeInsurance?: number;
+  ibi?: number;
+  wasteTax?: number;
+  community?: number;
+  rentInsurance?: number;
+  financing?: number;
+  utilitiesAssumedByTenant?: boolean;
+  driveFolder?: string;
+  nextReview?: string;
+};
+
 type PropertyRow = {
   id: string;
   name: string;
@@ -300,7 +319,8 @@ export async function POST(request: Request) {
 
     const body = (await request.json()) as
       | { action: "createProperty"; payload: PropertyInput }
-      | { action: "createDocument"; payload: DocumentInput };
+      | { action: "createDocument"; payload: DocumentInput }
+      | { action: "importProperties"; payload: { rows?: ImportPropertyInput[] } };
 
     if (body.action === "createProperty") {
       const created = await createProperty(database, body.payload);
@@ -310,6 +330,11 @@ export async function POST(request: Request) {
     if (body.action === "createDocument") {
       const created = await createDocument(database, body.payload);
       return json({ ...(await readPortfolio(database)), created, persisted: true });
+    }
+
+    if (body.action === "importProperties") {
+      const imported = await importProperties(database, body.payload.rows ?? []);
+      return json({ ...(await readPortfolio(database)), imported, persisted: true });
     }
 
     return json({ error: "Accion no soportada." }, 400);
@@ -599,6 +624,206 @@ async function createDocument(database: D1Database, input: DocumentInput) {
   ]);
 
   return { propertyId, label, status, detail };
+}
+
+async function importProperties(database: D1Database, rows: ImportPropertyInput[]) {
+  const cleanRows = rows
+    .map((row) => ({
+      ...row,
+      name: sanitizeText(row.name, ""),
+      address: sanitizeText(row.address, ""),
+    }))
+    .filter((row) => row.name && row.address)
+    .slice(0, 100);
+
+  if (cleanRows.length === 0) {
+    throw new Error("No hay inmuebles validos para importar.");
+  }
+
+  const importedIds: string[] = [];
+
+  for (const row of cleanRows) {
+    const existing = await database
+      .prepare(
+        `SELECT id FROM properties
+        WHERE lower(name) = lower(?) AND lower(address) = lower(?)
+        LIMIT 1`,
+      )
+      .bind(row.name, row.address)
+      .first<{ id: string }>();
+
+    const id = existing?.id ?? `IMP-${slugify(row.name).slice(0, 8).toUpperCase() || "ACTIVO"}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
+    const tenantName = sanitizeText(row.tenant, "Sin inquilino");
+    const hasTenant = tenantName !== "Sin inquilino" && tenantName !== "Pendiente";
+    const documents = importChecklist(row);
+    const statements: D1PreparedStatement[] = [
+      database
+        .prepare(
+          `INSERT INTO properties (
+            id, name, address, asset_type, status, drive_folder_url, market_value_cents
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            address = excluded.address,
+            asset_type = excluded.asset_type,
+            status = excluded.status,
+            drive_folder_url = excluded.drive_folder_url,
+            market_value_cents = excluded.market_value_cents,
+            updated_at = CURRENT_TIMESTAMP`,
+        )
+        .bind(
+          id,
+          row.name,
+          row.address,
+          sanitizeText(row.type, "Residencial"),
+          sanitizeText(row.status, "En revision"),
+          sanitizeText(row.driveFolder, `Drive / ${id}`),
+          toCents(Number(row.value ?? 0)),
+        ),
+      database
+        .prepare(
+          `INSERT INTO property_costs (
+            id, property_id, period_year, home_insurance_cents, ibi_cents,
+            waste_tax_cents, community_cents, rent_insurance_cents, financing_cents,
+            utilities_assumed_by_tenant
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            home_insurance_cents = excluded.home_insurance_cents,
+            ibi_cents = excluded.ibi_cents,
+            waste_tax_cents = excluded.waste_tax_cents,
+            community_cents = excluded.community_cents,
+            rent_insurance_cents = excluded.rent_insurance_cents,
+            financing_cents = excluded.financing_cents,
+            utilities_assumed_by_tenant = excluded.utilities_assumed_by_tenant`,
+        )
+        .bind(
+          `cost-${id}`,
+          id,
+          new Date().getFullYear(),
+          toCents(Number(row.homeInsurance ?? 0)),
+          toCents(Number(row.ibi ?? 0)),
+          toCents(Number(row.wasteTax ?? 0)),
+          toCents(Number(row.community ?? 0)),
+          toCents(Number(row.rentInsurance ?? 0)),
+          toCents(Number(row.financing ?? 0)),
+          row.utilitiesAssumedByTenant ? 1 : 0,
+        ),
+      database
+        .prepare(
+          `INSERT INTO leases (
+            id, property_id, tenant_id, start_date, current_rent_cents, status,
+            next_review_date
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            tenant_id = excluded.tenant_id,
+            current_rent_cents = excluded.current_rent_cents,
+            status = excluded.status,
+            next_review_date = excluded.next_review_date`,
+        )
+        .bind(
+          `lease-${id}`,
+          id,
+          hasTenant ? `tenant-${id}` : null,
+          new Date().toISOString().slice(0, 10),
+          toCents(Number(row.rent ?? 0)),
+          sanitizeText(row.status, "En revision"),
+          sanitizeText(row.nextReview, "Pendiente"),
+        ),
+      ...documents.map((document) =>
+        database
+          .prepare(
+            `INSERT INTO documents (
+              id, property_id, category, title, status, sensitive, extracted_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              status = excluded.status,
+              extracted_json = excluded.extracted_json,
+              updated_at = CURRENT_TIMESTAMP`,
+          )
+          .bind(
+            `doc-${id}-${slugify(document.label)}`,
+            id,
+            document.label,
+            document.label,
+            document.status,
+            document.status === "locked" ? 1 : 0,
+            JSON.stringify({ detail: document.detail }),
+          ),
+      ),
+      database
+        .prepare(
+          `INSERT INTO audit_log (id, entity_type, entity_id, action, changes_json)
+          VALUES (?, ?, ?, ?, ?)`,
+        )
+        .bind(`audit-${crypto.randomUUID()}`, "property", id, existing ? "import_update" : "import_create", JSON.stringify(row)),
+    ];
+
+    if (hasTenant) {
+      statements.splice(
+        2,
+        0,
+        database
+          .prepare(
+            `INSERT INTO tenants (id, display_name)
+            VALUES (?, ?)
+            ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name`,
+          )
+          .bind(`tenant-${id}`, tenantName),
+      );
+    }
+
+    await database.batch(statements);
+    importedIds.push(id);
+  }
+
+  return { count: importedIds.length, ids: importedIds };
+}
+
+function importChecklist(row: ImportPropertyInput): DocumentRequirement[] {
+  const hasTenant = Boolean(row.tenant && row.tenant !== "Sin inquilino" && row.tenant !== "Pendiente");
+
+  return [
+    {
+      label: "Contrato alquiler",
+      status: hasTenant ? "review" : "pending",
+      detail: hasTenant ? "Contrato localizado pendiente de validar" : "Activo sin inquilino",
+    },
+    {
+      label: "Seguro vivienda",
+      status: Number(row.homeInsurance ?? 0) > 0 ? "review" : "pending",
+      detail: Number(row.homeInsurance ?? 0) > 0 ? "Importe anual informado" : "No informado en plantilla",
+    },
+    {
+      label: "IBI",
+      status: Number(row.ibi ?? 0) > 0 ? "review" : "pending",
+      detail: Number(row.ibi ?? 0) > 0 ? "Importe anual informado" : "No informado en plantilla",
+    },
+    {
+      label: "Basuras",
+      status: Number(row.wasteTax ?? 0) > 0 ? "review" : "pending",
+      detail: Number(row.wasteTax ?? 0) > 0 ? "Importe anual informado" : "No informado en plantilla",
+    },
+    {
+      label: "Comunidad",
+      status: Number(row.community ?? 0) > 0 ? "review" : "pending",
+      detail: Number(row.community ?? 0) > 0 ? "Importe anual informado" : "No informado en plantilla",
+    },
+    {
+      label: "Seguro alquiler",
+      status: Number(row.rentInsurance ?? 0) > 0 ? "review" : "pending",
+      detail: Number(row.rentInsurance ?? 0) > 0 ? "Importe anual informado" : "No consta o no aplica",
+    },
+    {
+      label: "Suministros",
+      status: row.utilitiesAssumedByTenant ? "ok" : "review",
+      detail: row.utilitiesAssumedByTenant ? "Asumidos por inquilino" : "Pendiente confirmar titularidad",
+    },
+    {
+      label: "Financiacion",
+      status: Number(row.financing ?? 0) > 0 ? "locked" : "review",
+      detail: Number(row.financing ?? 0) > 0 ? "Importe anual informado" : "Sin financiacion informada",
+    },
+  ];
 }
 
 function mapProperty(row: PropertyRow): Property {

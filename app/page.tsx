@@ -53,6 +53,25 @@ type DocumentForm = {
   status: DocumentStatus;
 };
 
+type ImportRow = {
+  name: string;
+  address: string;
+  type: string;
+  status: string;
+  tenant: string;
+  rent: number;
+  value: number;
+  homeInsurance: number;
+  ibi: number;
+  wasteTax: number;
+  community: number;
+  rentInsurance: number;
+  financing: number;
+  utilitiesAssumedByTenant: boolean;
+  driveFolder: string;
+  nextReview: string;
+};
+
 type PortfolioResponse = {
   properties: Property[];
   documentsByProperty: Record<string, DocumentRequirement[]>;
@@ -62,6 +81,10 @@ type PortfolioResponse = {
     id?: string;
     propertyId?: string;
     label?: string;
+  };
+  imported?: {
+    count: number;
+    ids: string[];
   };
 };
 
@@ -274,8 +297,31 @@ const storageRows = [
   ["Documentos sensibles", "Metadatos primero", "Sin copiar archivos"],
 ];
 
-const navigation = ["Dashboard", "Inmuebles", "Documentos", "Acciones", "Finanzas", "Mercado", "Configuracion"];
+const navigation = ["Dashboard", "Inmuebles", "Documentos", "Importacion", "Acciones", "Finanzas", "Mercado", "Configuracion"];
 const userRoles: UserRole[] = ["Administrador", "Gestor", "Financiero", "Auditor", "Invitado"];
+
+const importTemplateUrl = "/katniss-import-template.csv";
+const importHeaders = [
+  "nombre",
+  "direccion",
+  "tipo",
+  "estado",
+  "inquilino",
+  "renta_mensual",
+  "valor_estimado",
+  "seguro_vivienda",
+  "ibi",
+  "basuras",
+  "comunidad",
+  "seguro_alquiler",
+  "financiacion",
+  "suministros_inquilino",
+  "carpeta_drive",
+  "proxima_revision",
+];
+const importSample = `${importHeaders.join(";")}
+Piso Centro;Calle Mayor 12, Madrid;Residencial;Ocupado;Ana Lopez;1200;260000;360;610;65;980;240;4200;si;Drive / Piso Centro;2026-09-15
+Local Norte;Avenida Industria 8, Valencia;Local;En revision;Taller Norte SL;1800;340000;520;920;140;1320;0;7800;si;Drive / Local Norte;2026-10-01`;
 
 const euro = new Intl.NumberFormat("es-ES", {
   style: "currency",
@@ -308,13 +354,15 @@ export default function Home() {
   ]);
   const [syncState, setSyncState] = useState("Pendiente de cargar");
   const [isSaving, setIsSaving] = useState(false);
+  const [importText, setImportText] = useState(importSample);
+  const [importMessage, setImportMessage] = useState("Plantilla lista para pegar datos reales.");
   const hideAmounts = activeRole === "Invitado";
   const visibleNavigation = hideAmounts
-    ? navigation.filter((item) => item !== "Acciones")
+    ? navigation.filter((item) => item !== "Acciones" && item !== "Importacion")
     : navigation;
   const mobileNavigation = hideAmounts
     ? ["Dashboard", "Inmuebles", "Documentos", "Finanzas"]
-    : ["Dashboard", "Inmuebles", "Documentos", "Acciones"];
+    : ["Dashboard", "Inmuebles", "Documentos", "Importacion"];
   const selected = portfolio.find((property) => property.id === selectedId) ?? portfolio[0];
   const selectedDocuments = documentsByProperty[selected.id] ?? [];
   const selectedAnnualCosts = Object.values(selected.annualCosts).reduce(
@@ -347,6 +395,19 @@ export default function Home() {
     };
   }, [documentsByProperty, portfolio]);
 
+  const importPreview = useMemo(() => parseImportRows(importText), [importText]);
+  const readyImportRows = importPreview.filter((row) => row.name && row.address);
+  const annualImportAmount = readyImportRows.reduce(
+    (sum, row) =>
+      sum +
+      row.homeInsurance +
+      row.ibi +
+      row.wasteTax +
+      row.community +
+      row.rentInsurance +
+      row.financing,
+    0,
+  );
   const amount = (value: number) => (hideAmounts ? "Importe oculto" : euro.format(value));
   const rate = (value: number) => (hideAmounts ? "Importe oculto" : `${value}%`);
   const trend = (value: string) => (hideAmounts && /[0-9]|EUR|€/.test(value) ? "Oculto" : value);
@@ -354,7 +415,7 @@ export default function Home() {
   const changeRole = (role: UserRole) => {
     setActiveRole(role);
 
-    if (role === "Invitado" && activeView === "Acciones") {
+    if (role === "Invitado" && (activeView === "Acciones" || activeView === "Importacion")) {
       setActiveView("Dashboard");
     }
   };
@@ -556,6 +617,55 @@ export default function Home() {
       `Documento "${newDocument.label}" registrado para ${targetId}.`,
       ...current,
     ]);
+    setIsSaving(false);
+  };
+
+  const previewImport = () => {
+    setImportMessage(
+      readyImportRows.length === 0
+        ? "No hay filas listas: revisa que cada inmueble tenga nombre y direccion."
+        : `${readyImportRows.length} inmueble${readyImportRows.length === 1 ? "" : "s"} listo${readyImportRows.length === 1 ? "" : "s"} para importar.`,
+    );
+  };
+
+  const importProperties = async () => {
+    previewImport();
+
+    if (readyImportRows.length === 0) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "importProperties", payload: { rows: readyImportRows } }),
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo importar la plantilla.");
+      }
+
+      const data = (await response.json()) as PortfolioResponse;
+
+      setPortfolio(data.properties);
+      setDocumentsByProperty(data.documentsByProperty);
+      if (data.imported?.ids[0]) {
+        setSelectedId(data.imported.ids[0]);
+      }
+      setSyncState("D1 activo");
+      setImportMessage(`${data.imported?.count ?? readyImportRows.length} inmuebles importados en D1.`);
+      setActionLog((current) => [
+        `${data.imported?.count ?? readyImportRows.length} inmuebles reales importados desde plantilla.`,
+        ...current,
+      ]);
+    } catch {
+      setSyncState("Demo sin conexion");
+      setImportMessage("No se pudo guardar en D1; la plantilla queda preparada para reintentar.");
+    }
+
     setIsSaving(false);
   };
 
@@ -824,6 +934,87 @@ export default function Home() {
             </section>
           )}
 
+          {activeView === "Importacion" && (
+            <section className="import-view" aria-label="Importacion de datos reales">
+              <div className="import-hero">
+                <div>
+                  <p className="eyebrow">Datos reales</p>
+                  <h3>Importa tu cartera desde una plantilla antes de automatizar Google Drive.</h3>
+                </div>
+                <a href={importTemplateUrl} download>
+                  Descargar plantilla
+                </a>
+              </div>
+
+              <div className="import-grid">
+                <section className="import-panel">
+                  <div>
+                    <p className="eyebrow">Plantilla CSV</p>
+                    <h3>Pegar datos estructurados</h3>
+                  </div>
+                  <textarea
+                    value={importText}
+                    onChange={(event) => setImportText(event.target.value)}
+                    spellCheck={false}
+                    aria-label="Datos CSV de inmuebles"
+                  />
+                  <div className="import-actions">
+                    <button type="button" className="secondary-action" onClick={previewImport}>
+                      Previsualizar
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-action"
+                      onClick={importProperties}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? "Importando..." : "Importar a D1"}
+                    </button>
+                  </div>
+                  <p className="import-note">{importMessage}</p>
+                </section>
+
+                <section className="import-panel">
+                  <div>
+                    <p className="eyebrow">Revision previa</p>
+                    <h3>{readyImportRows.length} inmuebles listos</h3>
+                  </div>
+                  <div className="import-summary">
+                    <Metric label="Renta mensual" value={amount(readyImportRows.reduce((sum, row) => sum + row.rent, 0))} trend="Plantilla" />
+                    <Metric label="Valor estimado" value={amount(readyImportRows.reduce((sum, row) => sum + row.value, 0))} trend="Plantilla" />
+                    <Metric label="Costes anuales" value={amount(annualImportAmount)} trend="Completo" />
+                  </div>
+                  <div className="import-table" role="table" aria-label="Previsualizacion de inmuebles importados">
+                    <div role="row">
+                      <span>Inmueble</span>
+                      <span>Renta</span>
+                      <span>Costes</span>
+                      <span>Suministros</span>
+                    </div>
+                    {readyImportRows.slice(0, 6).map((row) => {
+                      const costs =
+                        row.homeInsurance +
+                        row.ibi +
+                        row.wasteTax +
+                        row.community +
+                        row.rentInsurance +
+                        row.financing;
+
+                      return (
+                        <div key={`${row.name}-${row.address}`} role="row">
+                          <strong>{row.name}</strong>
+                          <span>{amount(row.rent)}</span>
+                          <span>{amount(costs)}</span>
+                          <span>{row.utilitiesAssumedByTenant ? "Inquilino" : "Revisar"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              </div>
+            </section>
+          )}
+
           {activeView === "Acciones" && (
             <section className="actions-view" aria-label="Acciones de cartera">
               <div className="actions-hero">
@@ -1005,7 +1196,7 @@ export default function Home() {
             </section>
           )}
 
-          {activeView !== "Configuracion" && activeView !== "Acciones" && (
+          {activeView !== "Configuracion" && activeView !== "Importacion" && activeView !== "Acciones" && (
           <section className="content-grid">
             <div className="main-column">
               <section className="section-head">
@@ -1189,6 +1380,81 @@ export default function Home() {
       )}
     </main>
   );
+}
+
+function parseImportRows(text: string): ImportRow[] {
+  const [headerLine, ...lines] = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!headerLine) {
+    return [];
+  }
+
+  const headers = headerLine.split(";").map((header) => header.trim().toLowerCase());
+
+  return lines.map((line) => {
+    const values = splitCsvLine(line);
+    const row = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
+
+    return {
+      name: row.nombre ?? "",
+      address: row.direccion ?? "",
+      type: row.tipo || "Residencial",
+      status: row.estado || "En revision",
+      tenant: row.inquilino || "Sin inquilino",
+      rent: parseEuro(row.renta_mensual),
+      value: parseEuro(row.valor_estimado),
+      homeInsurance: parseEuro(row.seguro_vivienda),
+      ibi: parseEuro(row.ibi),
+      wasteTax: parseEuro(row.basuras),
+      community: parseEuro(row.comunidad),
+      rentInsurance: parseEuro(row.seguro_alquiler),
+      financing: parseEuro(row.financiacion),
+      utilitiesAssumedByTenant: parseYes(row.suministros_inquilino),
+      driveFolder: row.carpeta_drive || "",
+      nextReview: row.proxima_revision || "Pendiente",
+    };
+  });
+}
+
+function splitCsvLine(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let quoted = false;
+
+  for (const character of line) {
+    if (character === '"') {
+      quoted = !quoted;
+      continue;
+    }
+
+    if (character === ";" && !quoted) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += character;
+  }
+
+  values.push(current.trim());
+  return values;
+}
+
+function parseEuro(value?: string) {
+  const normalized = (value ?? "")
+    .replace(/\s/g, "")
+    .replace(/EUR|€/gi, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseYes(value?: string) {
+  return ["si", "sí", "yes", "true", "1"].includes((value ?? "").trim().toLowerCase());
 }
 
 function Metric({ label, value, trend }: { label: string; value: string; trend: string }) {

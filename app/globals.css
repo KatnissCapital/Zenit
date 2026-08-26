@@ -644,6 +644,12 @@ h3 {
   margin-bottom: 24px;
 }
 
+.import-view {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 .settings-hero {
   display: flex;
   align-items: center;
@@ -668,6 +674,19 @@ h3 {
     #ffffff;
 }
 
+.import-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(36, 87, 166, 0.1), transparent 44%),
+    #ffffff;
+}
+
 .settings-hero h3 {
   max-width: 700px;
   font-size: 26px;
@@ -675,6 +694,11 @@ h3 {
 
 .actions-hero h3 {
   max-width: 680px;
+  font-size: 26px;
+}
+
+.import-hero h3 {
+  max-width: 760px;
   font-size: 26px;
 }
 
@@ -686,6 +710,19 @@ h3 {
   padding: 8px 11px;
   font-size: 12px;
   font-weight: 860;
+  white-space: nowrap;
+}
+
+.import-hero a {
+  display: grid;
+  min-height: 40px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--ink);
+  color: white;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 820;
   white-space: nowrap;
 }
 
@@ -701,15 +738,97 @@ h3 {
   gap: 16px;
 }
 
+.import-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  gap: 16px;
+}
+
 .settings-panel,
 .action-form,
-.action-log {
+.action-log,
+.import-panel {
   display: grid;
   gap: 14px;
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: white;
+}
+
+.import-panel textarea {
+  width: 100%;
+  min-height: 260px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcf8;
+  color: var(--ink);
+  padding: 12px;
+  font-family: var(--font-mono), Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.import-panel textarea:focus {
+  border-color: rgba(36, 87, 166, 0.62);
+  box-shadow: 0 0 0 3px rgba(36, 87, 166, 0.1);
+}
+
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.import-actions button {
+  min-height: 42px;
+}
+
+.import-note {
+  border-radius: 8px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.import-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.import-table {
+  display: grid;
+  gap: 8px;
+}
+
+.import-table > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) repeat(3, minmax(84px, 0.8fr));
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  border-radius: 8px;
+  background: #f5f7f3;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.import-table > div:first-child {
+  min-height: 34px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.import-table strong,
+.import-table span {
+  overflow-wrap: anywhere;
 }
 
 .action-form label {
@@ -1360,7 +1479,8 @@ h3 {
   .content-grid,
   .document-index,
   .settings-grid,
-  .actions-grid {
+  .actions-grid,
+  .import-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1458,6 +1578,7 @@ h3 {
 
   .settings-hero,
   .actions-hero,
+  .import-hero,
   .role-list article,
   .storage-list article {
     align-items: stretch;
@@ -1469,6 +1590,11 @@ h3 {
   }
 
   .role-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .import-summary,
+  .import-table > div {
     grid-template-columns: 1fr;
   }
 

@@ -1,0 +1,3 @@
+nombre;direccion;tipo;estado;inquilino;renta_mensual;valor_estimado;seguro_vivienda;ibi;basuras;comunidad;seguro_alquiler;financiacion;suministros_inquilino;carpeta_drive;proxima_revision
+Piso Centro;Calle Mayor 12, Madrid;Residencial;Ocupado;Ana Lopez;1200;260000;360;610;65;980;240;4200;si;Drive / Piso Centro;2026-09-15
+Local Norte;Avenida Industria 8, Valencia;Local;En revision;Taller Norte SL;1800;340000;520;920;140;1320;0;7800;si;Drive / Local Norte;2026-10-01
