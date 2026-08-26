@@ -30,6 +30,14 @@ type Property = {
   tags: string[];
 };
 
+type DocumentStatus = "ok" | "pending" | "review" | "locked";
+
+type DocumentRequirement = {
+  label: string;
+  status: DocumentStatus;
+  detail: string;
+};
+
 const properties: Property[] = [
   {
     id: "MAD-014",
@@ -179,6 +187,49 @@ const driveChecklist = [
   ["Datos sensibles", "Requiere login"],
 ];
 
+const documentRequirements: Record<string, DocumentRequirement[]> = {
+  "MAD-014": [
+    { label: "Contrato alquiler", status: "ok", detail: "Firmado y vigente" },
+    { label: "Seguro vivienda", status: "ok", detail: "Poliza activa" },
+    { label: "IBI", status: "ok", detail: "Recibo anual archivado" },
+    { label: "Basuras", status: "ok", detail: "Tasa vinculada" },
+    { label: "Comunidad", status: "review", detail: "Pendiente validar cuota 2026" },
+    { label: "Seguro alquiler", status: "ok", detail: "Existe garantia" },
+    { label: "Suministros", status: "ok", detail: "Asumidos por inquilino" },
+    { label: "Financiacion", status: "locked", detail: "Requiere login" },
+  ],
+  "VAL-003": [
+    { label: "Contrato alquiler", status: "ok", detail: "Firmado y vigente" },
+    { label: "Seguro vivienda", status: "review", detail: "Caduca proximamente" },
+    { label: "IBI", status: "ok", detail: "Recibo anual archivado" },
+    { label: "Basuras", status: "pending", detail: "No localizada" },
+    { label: "Comunidad", status: "ok", detail: "Cuotas cargadas" },
+    { label: "Seguro alquiler", status: "pending", detail: "No consta" },
+    { label: "Suministros", status: "review", detail: "Confirmar titularidad" },
+    { label: "Financiacion", status: "locked", detail: "Requiere login" },
+  ],
+  "BCN-021": [
+    { label: "Contrato alquiler", status: "review", detail: "Revision IRAV pendiente" },
+    { label: "Seguro vivienda", status: "ok", detail: "Poliza activa" },
+    { label: "IBI", status: "ok", detail: "Recibo anual archivado" },
+    { label: "Basuras", status: "ok", detail: "Tasa vinculada" },
+    { label: "Comunidad", status: "ok", detail: "Cuotas cargadas" },
+    { label: "Seguro alquiler", status: "pending", detail: "No aplica o no consta" },
+    { label: "Suministros", status: "ok", detail: "Asumidos por inquilino" },
+    { label: "Financiacion", status: "locked", detail: "Requiere login" },
+  ],
+  "SEV-009": [
+    { label: "Contrato alquiler", status: "pending", detail: "Activo vacante" },
+    { label: "Seguro vivienda", status: "ok", detail: "Poliza activa" },
+    { label: "IBI", status: "pending", detail: "Falta ultimo recibo" },
+    { label: "Basuras", status: "pending", detail: "Falta tasa municipal" },
+    { label: "Comunidad", status: "ok", detail: "Cuotas cargadas" },
+    { label: "Seguro alquiler", status: "review", detail: "Revisar al alquilar" },
+    { label: "Suministros", status: "review", detail: "Preparar cambio titular" },
+    { label: "Financiacion", status: "locked", detail: "Requiere login" },
+  ],
+};
+
 const navigation = ["Dashboard", "Inmuebles", "Documentos", "Finanzas", "Mercado"];
 
 const euro = new Intl.NumberFormat("es-ES", {
@@ -191,6 +242,7 @@ export default function Home() {
   const [activeView, setActiveView] = useState("Dashboard");
   const [selectedId, setSelectedId] = useState(properties[0].id);
   const selected = properties.find((property) => property.id === selectedId) ?? properties[0];
+  const selectedDocuments = documentRequirements[selected.id] ?? [];
   const selectedAnnualCosts = Object.values(selected.annualCosts).reduce(
     (sum, value) => sum + value,
     0,
@@ -208,6 +260,17 @@ export default function Home() {
     );
 
     return { rent, value, cashflow, pendingDocs, annualCosts };
+  }, []);
+
+  const documentTotals = useMemo(() => {
+    const allDocuments = properties.flatMap((property) => documentRequirements[property.id] ?? []);
+
+    return {
+      ok: allDocuments.filter((document) => document.status === "ok").length,
+      pending: allDocuments.filter((document) => document.status === "pending").length,
+      review: allDocuments.filter((document) => document.status === "review").length,
+      locked: allDocuments.filter((document) => document.status === "locked").length,
+    };
   }, []);
 
   return (
@@ -273,6 +336,86 @@ export default function Home() {
               <Metric label="Costes anuales" value={euro.format(totals.annualCosts)} trend="Incluye deuda" />
             </div>
           </section>
+
+          {activeView === "Documentos" && (
+            <section className="document-index" aria-label="Indice documental">
+              <div className="document-index-head">
+                <div>
+                  <p className="eyebrow">Indice documental</p>
+                  <h3>Carpeta Drive preparada para clasificar expedientes por inmueble.</h3>
+                </div>
+                <a href={driveRootUrl} target="_blank" rel="noreferrer">
+                  Abrir carpeta raiz
+                </a>
+              </div>
+
+              <div className="doc-summary-grid">
+                <DocSummary label="Completos" value={documentTotals.ok} status="ok" />
+                <DocSummary label="Pendientes" value={documentTotals.pending} status="pending" />
+                <DocSummary label="A revisar" value={documentTotals.review} status="review" />
+                <DocSummary label="Sensibles" value={documentTotals.locked} status="locked" />
+              </div>
+
+              <div className="document-matrix">
+                {properties.map((property) => {
+                  const documents = documentRequirements[property.id] ?? [];
+                  const pendingCount = documents.filter(
+                    (document) => document.status === "pending" || document.status === "review",
+                  ).length;
+
+                  return (
+                    <button
+                      key={property.id}
+                      className={
+                        property.id === selected.id ? "document-row selected" : "document-row"
+                      }
+                      onClick={() => setSelectedId(property.id)}
+                    >
+                      <div className="doc-property">
+                        <strong>{property.name}</strong>
+                        <span>{property.driveFolder}</span>
+                      </div>
+                      <div className="doc-mini-list">
+                        {documents.slice(0, 4).map((document) => (
+                          <span key={document.label} className={`doc-chip ${document.status}`}>
+                            {document.label}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="doc-progress">
+                        <span>{property.documents}%</span>
+                        <strong>
+                          {pendingCount === 0
+                            ? "Sin bloqueos"
+                            : `${pendingCount} puntos pendientes`}
+                        </strong>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <aside className="selected-documents">
+                <div>
+                  <p className="eyebrow">Expediente seleccionado</p>
+                  <h3>{selected.name}</h3>
+                </div>
+                <div className="selected-doc-list">
+                  {selectedDocuments.map((document) => (
+                    <article key={document.label}>
+                      <span className={`doc-chip ${document.status}`}>
+                        {statusLabel(document.status)}
+                      </span>
+                      <div>
+                        <strong>{document.label}</strong>
+                        <p>{document.detail}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </aside>
+            </section>
+          )}
 
           <section className="content-grid">
             <div className="main-column">
@@ -482,4 +625,32 @@ function Cost({ label, value }: { label: string; value: number }) {
       <strong>{value > 0 ? euro.format(value) : "No consta"}</strong>
     </div>
   );
+}
+
+function DocSummary({
+  label,
+  value,
+  status,
+}: {
+  label: string;
+  value: number;
+  status: DocumentStatus;
+}) {
+  return (
+    <article className={`doc-summary-card ${status}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function statusLabel(status: DocumentStatus) {
+  const labels: Record<DocumentStatus, string> = {
+    ok: "Completo",
+    pending: "Pendiente",
+    review: "Revisar",
+    locked: "Sensible",
+  };
+
+  return labels[status];
 }

@@ -10,6 +10,7 @@ Demo funcional de una aplicacion web responsive/PWA para gestionar una cartera i
 - KPIs de renta, valor, cash flow y documentacion.
 - Control economico por inmueble: seguro de vivienda, IBI, basuras, comunidad,
   seguro de alquiler, financiacion y suministros asumidos por inquilino.
+- Vista de indice documental por inmueble con carpeta Drive, checklist y estados.
 - Alertas iniciales para revisiones de renta, documentos y facturas.
 - Base preparada para crecer hacia usuarios, Google Drive, Catastro, INE, OCR y repositorio documental.
 

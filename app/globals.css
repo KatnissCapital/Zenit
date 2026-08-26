@@ -267,6 +267,227 @@ h3 {
     #ffffff;
 }
 
+.document-index {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.72fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.document-index-head,
+.doc-summary-grid,
+.document-matrix {
+  grid-column: 1;
+}
+
+.document-index-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.document-index-head h3 {
+  max-width: 640px;
+}
+
+.document-index-head a {
+  display: grid;
+  min-height: 40px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--ink);
+  color: white;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.doc-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.doc-summary-card {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid var(--line);
+}
+
+.doc-summary-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.doc-summary-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 24px;
+}
+
+.doc-summary-card.ok {
+  border-color: rgba(31, 122, 91, 0.3);
+}
+
+.doc-summary-card.pending {
+  border-color: rgba(179, 59, 85, 0.3);
+}
+
+.doc-summary-card.review {
+  border-color: rgba(168, 101, 18, 0.35);
+}
+
+.doc-summary-card.locked {
+  border-color: rgba(36, 87, 166, 0.3);
+}
+
+.document-matrix {
+  display: grid;
+  gap: 10px;
+}
+
+.document-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(260px, 1fr) 150px;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  min-height: 86px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  text-align: left;
+}
+
+.document-row.selected {
+  border-color: rgba(31, 122, 91, 0.55);
+  box-shadow: 0 12px 32px rgba(23, 33, 28, 0.08);
+}
+
+.doc-property strong,
+.doc-property span {
+  display: block;
+}
+
+.doc-property strong {
+  margin-bottom: 5px;
+}
+
+.doc-property span {
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.doc-mini-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.doc-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 860;
+  white-space: nowrap;
+}
+
+.doc-chip.ok {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.doc-chip.pending {
+  background: var(--rose-soft);
+  color: var(--rose);
+}
+
+.doc-chip.review {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.doc-chip.locked {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.doc-progress {
+  justify-self: end;
+  text-align: right;
+}
+
+.doc-progress span,
+.doc-progress strong {
+  display: block;
+}
+
+.doc-progress span {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.doc-progress strong {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.selected-documents {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: start;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.selected-doc-list {
+  display: grid;
+  gap: 10px;
+}
+
+.selected-doc-list article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 11px;
+  border-radius: 8px;
+  background: #f5f7f3;
+}
+
+.selected-doc-list strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.selected-doc-list p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .hero-copy h3 {
   max-width: 620px;
   margin-bottom: 10px;
@@ -782,12 +1003,25 @@ h3 {
   }
 
   .hero-band,
-  .content-grid {
+  .content-grid,
+  .document-index {
     grid-template-columns: 1fr;
   }
 
+  .document-index-head,
+  .doc-summary-grid,
+  .document-matrix,
+  .selected-documents {
+    grid-column: auto;
+  }
+
+  .selected-documents {
+    grid-row: auto;
+  }
+
   .hero-metrics,
-  .finance-grid {
+  .finance-grid,
+  .doc-summary-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -837,6 +1071,20 @@ h3 {
   .section-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .document-index-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .document-row {
+    grid-template-columns: 1fr;
+  }
+
+  .doc-progress {
+    justify-self: start;
+    text-align: left;
   }
 
   .segmented {
