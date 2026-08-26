@@ -8,6 +8,8 @@ Demo funcional de una aplicacion web responsive/PWA para gestionar una cartera i
 - Listado de inmuebles prioritarios.
 - Ficha lateral del inmueble seleccionado.
 - KPIs de renta, valor, cash flow y documentacion.
+- Control economico por inmueble: seguro de vivienda, IBI, basuras, comunidad,
+  seguro de alquiler, financiacion y suministros asumidos por inquilino.
 - Alertas iniciales para revisiones de renta, documentos y facturas.
 - Base preparada para crecer hacia usuarios, Google Drive, Catastro, INE, OCR y repositorio documental.
 

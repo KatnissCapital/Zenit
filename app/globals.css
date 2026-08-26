@@ -462,7 +462,8 @@ h3 {
 
 .finance-panel,
 .detail-card,
-.alerts-panel {
+.alerts-panel,
+.drive-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: white;
@@ -561,6 +562,68 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.cost-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f5f7f3;
+}
+
+.cost-total,
+.cost-row,
+.utility-ok,
+.utility-risk {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+}
+
+.cost-total {
+  margin-bottom: 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cost-total span,
+.cost-row span,
+.utility-ok span,
+.utility-risk span,
+.drive-checks span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 740;
+}
+
+.cost-total strong,
+.cost-row strong,
+.utility-ok strong,
+.utility-risk strong {
+  text-align: right;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.utility-ok,
+.utility-risk {
+  margin-top: 2px;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.utility-ok {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.utility-risk {
+  background: var(--rose-soft);
+  color: var(--rose);
+}
+
 .tag-list {
   flex-wrap: wrap;
   gap: 8px;
@@ -595,6 +658,41 @@ h3 {
 .alerts-panel {
   display: grid;
   gap: 10px;
+}
+
+.drive-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.drive-panel > p {
+  border-radius: 8px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.drive-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.drive-checks div {
+  min-width: 0;
+  border-radius: 8px;
+  background: #f5f7f3;
+  padding: 10px;
+}
+
+.drive-checks strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .alert-item {

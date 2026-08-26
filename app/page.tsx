@@ -17,6 +17,16 @@ type Property = {
   nextReview: string;
   risk: "Bajo" | "Medio" | "Alto";
   value: number;
+  annualCosts: {
+    homeInsurance: number;
+    ibi: number;
+    wasteTax: number;
+    community: number;
+    rentInsurance: number;
+    financing: number;
+  };
+  utilitiesAssumedByTenant: boolean;
+  driveFolder: string;
   tags: string[];
 };
 
@@ -36,6 +46,16 @@ const properties: Property[] = [
     nextReview: "15 sep",
     risk: "Bajo",
     value: 428000,
+    annualCosts: {
+      homeInsurance: 410,
+      ibi: 780,
+      wasteTax: 68,
+      community: 1560,
+      rentInsurance: 285,
+      financing: 7440,
+    },
+    utilitiesAssumedByTenant: true,
+    driveFolder: "Drive / MAD-014 Piso Salamanca",
     tags: ["IPC revisable", "Contrato firmado"],
   },
   {
@@ -53,6 +73,16 @@ const properties: Property[] = [
     nextReview: "02 oct",
     risk: "Medio",
     value: 286000,
+    annualCosts: {
+      homeInsurance: 355,
+      ibi: 520,
+      wasteTax: 62,
+      community: 1040,
+      rentInsurance: 0,
+      financing: 4320,
+    },
+    utilitiesAssumedByTenant: false,
+    driveFolder: "Drive / VAL-003 Atico Ruzafa",
     tags: ["Seguro caduca", "Factura pendiente"],
   },
   {
@@ -70,6 +100,16 @@ const properties: Property[] = [
     nextReview: "28 ago",
     risk: "Medio",
     value: 512000,
+    annualCosts: {
+      homeInsurance: 690,
+      ibi: 1380,
+      wasteTax: 180,
+      community: 2220,
+      rentInsurance: 0,
+      financing: 11880,
+    },
+    utilitiesAssumedByTenant: true,
+    driveFolder: "Drive / BCN-021 Local Gracia",
     tags: ["IRAV pendiente", "Presupuesto abierto"],
   },
   {
@@ -87,6 +127,16 @@ const properties: Property[] = [
     nextReview: "Vacante",
     risk: "Alto",
     value: 238000,
+    annualCosts: {
+      homeInsurance: 330,
+      ibi: 460,
+      wasteTax: 54,
+      community: 890,
+      rentInsurance: 210,
+      financing: 3960,
+    },
+    utilitiesAssumedByTenant: false,
+    driveFolder: "Drive / SEV-009 Apartamento Triana",
     tags: ["Vacancia", "Cedula pendiente"],
   },
 ];
@@ -119,6 +169,13 @@ const financialRows = [
   ["Vacancia prevista", "5,5%", "-1,1 pp"],
 ];
 
+const driveChecklist = [
+  ["Carpeta raiz", "Pendiente de vincular"],
+  ["Estructura ordenada", "Confirmada"],
+  ["Indice documental", "Siguiente paso"],
+  ["Datos sensibles", "Requiere login"],
+];
+
 const navigation = ["Dashboard", "Inmuebles", "Documentos", "Finanzas", "Mercado"];
 
 const euro = new Intl.NumberFormat("es-ES", {
@@ -131,14 +188,23 @@ export default function Home() {
   const [activeView, setActiveView] = useState("Dashboard");
   const [selectedId, setSelectedId] = useState(properties[0].id);
   const selected = properties.find((property) => property.id === selectedId) ?? properties[0];
+  const selectedAnnualCosts = Object.values(selected.annualCosts).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
 
   const totals = useMemo(() => {
     const rent = properties.reduce((sum, property) => sum + property.rent, 0);
     const value = properties.reduce((sum, property) => sum + property.value, 0);
     const cashflow = properties.reduce((sum, property) => sum + property.cashflow, 0);
     const pendingDocs = properties.reduce((sum, property) => sum + property.pendingDocs, 0);
+    const annualCosts = properties.reduce(
+      (sum, property) =>
+        sum + Object.values(property.annualCosts).reduce((costs, value) => costs + value, 0),
+      0,
+    );
 
-    return { rent, value, cashflow, pendingDocs };
+    return { rent, value, cashflow, pendingDocs, annualCosts };
   }, []);
 
   return (
@@ -201,7 +267,7 @@ export default function Home() {
               <Metric label="Valor cartera" value={euro.format(totals.value)} trend="+3,1%" />
               <Metric label="Renta mensual" value={euro.format(totals.rent)} trend="+4,2%" />
               <Metric label="Cash flow" value={euro.format(totals.cashflow)} trend="+310 EUR" />
-              <Metric label="Docs pendientes" value={`${totals.pendingDocs}`} trend="Prioridad" />
+              <Metric label="Costes anuales" value={euro.format(totals.annualCosts)} trend="Incluye deuda" />
             </div>
           </section>
 
@@ -292,6 +358,27 @@ export default function Home() {
                   <Detail label="Cash flow" value={euro.format(selected.cashflow)} />
                 </div>
 
+                <section className="cost-panel" aria-label="Costes reales del inmueble">
+                  <div className="cost-total">
+                    <span>Costes anuales controlados</span>
+                    <strong>{euro.format(selectedAnnualCosts)}</strong>
+                  </div>
+                  <Cost label="Seguro vivienda" value={selected.annualCosts.homeInsurance} />
+                  <Cost label="IBI" value={selected.annualCosts.ibi} />
+                  <Cost label="Basuras" value={selected.annualCosts.wasteTax} />
+                  <Cost label="Comunidad" value={selected.annualCosts.community} />
+                  <Cost label="Seguro alquiler" value={selected.annualCosts.rentInsurance} />
+                  <Cost label="Financiacion" value={selected.annualCosts.financing} />
+                  <div className={selected.utilitiesAssumedByTenant ? "utility-ok" : "utility-risk"}>
+                    <span>Suministros</span>
+                    <strong>
+                      {selected.utilitiesAssumedByTenant
+                        ? "Asumidos por inquilino"
+                        : "Pendiente de confirmar"}
+                    </strong>
+                  </div>
+                </section>
+
                 <div className="tag-list">
                   {selected.tags.map((tag) => (
                     <span key={tag}>{tag}</span>
@@ -302,6 +389,22 @@ export default function Home() {
                   <button>Ver expediente</button>
                   <button>Registrar incidencia</button>
                   <button>Aprobar factura</button>
+                </div>
+              </section>
+
+              <section className="drive-panel">
+                <div>
+                  <p className="eyebrow">Google Drive</p>
+                  <h3>Preparado para datos reales</h3>
+                </div>
+                <p>{selected.driveFolder}</p>
+                <div className="drive-checks">
+                  {driveChecklist.map(([label, state]) => (
+                    <div key={label}>
+                      <span>{label}</span>
+                      <strong>{state}</strong>
+                    </div>
+                  ))}
                 </div>
               </section>
 
@@ -359,6 +462,15 @@ function Detail({ label, value }: { label: string; value: string }) {
     <div>
       <span>{label}</span>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+function Cost({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="cost-row">
+      <span>{label}</span>
+      <strong>{value > 0 ? euro.format(value) : "No consta"}</strong>
     </div>
   );
 }
