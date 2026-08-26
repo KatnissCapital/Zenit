@@ -657,7 +657,8 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error("No se pudo importar la plantilla.");
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "No se pudo importar la plantilla.");
       }
 
       const data = (await response.json()) as PortfolioResponse;
@@ -673,9 +674,13 @@ export default function Home() {
         `${data.imported?.count ?? readyImportRows.length} inmuebles reales importados desde plantilla.`,
         ...current,
       ]);
-    } catch {
+    } catch (error) {
       setSyncState("Demo sin conexion");
-      setImportMessage("No se pudo guardar en D1; la plantilla queda preparada para reintentar.");
+      setImportMessage(
+        error instanceof Error
+          ? `No se pudo guardar en D1: ${error.message}`
+          : "No se pudo guardar en D1; la plantilla queda preparada para reintentar.",
+      );
     }
 
     setIsSaving(false);

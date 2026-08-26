@@ -668,8 +668,7 @@ async function importProperties(database: D1Database, rows: ImportPropertyInput[
             asset_type = excluded.asset_type,
             status = excluded.status,
             drive_folder_url = excluded.drive_folder_url,
-            market_value_cents = excluded.market_value_cents,
-            updated_at = CURRENT_TIMESTAMP`,
+            market_value_cents = excluded.market_value_cents`,
         )
         .bind(
           id,
