@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 type Property = {
   id: string;
@@ -51,6 +51,18 @@ type DocumentForm = {
   label: string;
   detail: string;
   status: DocumentStatus;
+};
+
+type PortfolioResponse = {
+  properties: Property[];
+  documentsByProperty: Record<string, DocumentRequirement[]>;
+  persisted: boolean;
+  message: string;
+  created?: {
+    id?: string;
+    propertyId?: string;
+    label?: string;
+  };
 };
 
 const properties: Property[] = [
@@ -253,8 +265,8 @@ const roleRows = [
 ];
 
 const storageRows = [
-  ["Base de datos", "D1 / DB", "Declarada"],
-  ["Migracion inicial", "8 tablas e indices", "Versionada"],
+  ["Base de datos", "D1 / DB", "Lectura y escritura"],
+  ["Migracion inicial", "8 tablas e indices", "Aplicada al iniciar"],
   ["Drive", "Carpeta raiz vinculada", "Pendiente API"],
   ["Documentos sensibles", "Metadatos primero", "Sin copiar archivos"],
 ];
@@ -289,6 +301,8 @@ export default function Home() {
   const [actionLog, setActionLog] = useState<string[]>([
     "Base de datos preparada para persistir altas y documentos.",
   ]);
+  const [syncState, setSyncState] = useState("Pendiente de cargar");
+  const [isSaving, setIsSaving] = useState(false);
   const selected = portfolio.find((property) => property.id === selectedId) ?? portfolio[0];
   const selectedDocuments = documentsByProperty[selected.id] ?? [];
   const selectedAnnualCosts = Object.values(selected.annualCosts).reduce(
@@ -321,8 +335,96 @@ export default function Home() {
     };
   }, [documentsByProperty, portfolio]);
 
-  const addProperty = (event: FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    let ignore = false;
+
+    async function loadPortfolio() {
+      try {
+        setSyncState("Cargando D1");
+        const response = await fetch("/api/portfolio", { cache: "no-store" });
+
+        if (!response.ok) {
+          throw new Error("No se pudo cargar la cartera.");
+        }
+
+        const data = (await response.json()) as PortfolioResponse;
+
+        if (ignore || data.properties.length === 0) {
+          return;
+        }
+
+        setPortfolio(data.properties);
+        setDocumentsByProperty(data.documentsByProperty);
+        setSelectedId((current) =>
+          data.properties.some((property) => property.id === current)
+            ? current
+            : data.properties[0].id,
+        );
+        setDocumentForm((current) => ({
+          ...current,
+          propertyId: data.properties.some((property) => property.id === current.propertyId)
+            ? current.propertyId
+            : data.properties[0].id,
+        }));
+        setSyncState(data.persisted ? "D1 activo" : "Demo local");
+        setActionLog((current) => [data.message, ...current]);
+      } catch {
+        if (!ignore) {
+          setSyncState("Demo sin conexion");
+          setActionLog((current) => [
+            "No se pudo leer D1; se mantienen los datos demo de la sesion.",
+            ...current,
+          ]);
+        }
+      }
+    }
+
+    void loadPortfolio();
+
+    return () => {
+      ignore = true;
+    };
+  }, [isAuthenticated]);
+
+  const addProperty = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "createProperty", payload: propertyForm }),
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo guardar el inmueble.");
+      }
+
+      const data = (await response.json()) as PortfolioResponse;
+
+      setPortfolio(data.properties);
+      setDocumentsByProperty(data.documentsByProperty);
+      if (data.created?.id) {
+        setSelectedId(data.created.id);
+        setDocumentForm((current) => ({ ...current, propertyId: data.created?.id ?? current.propertyId }));
+      }
+      setPropertyForm({ name: "", address: "", rent: "", value: "", driveFolder: "" });
+      setSyncState("D1 activo");
+      setActionLog((current) => [
+        `Inmueble ${data.created?.id ?? ""} guardado en D1.`,
+        ...current,
+      ]);
+      setIsSaving(false);
+      return;
+    } catch {
+      setSyncState("Demo sin conexion");
+    }
+
     const nextIndex = portfolio.length + 1;
     const rent = Number(propertyForm.rent || 0);
     const value = Number(propertyForm.value || 0);
@@ -372,11 +474,47 @@ export default function Home() {
     setSelectedId(id);
     setDocumentForm((current) => ({ ...current, propertyId: id }));
     setPropertyForm({ name: "", address: "", rent: "", value: "", driveFolder: "" });
-    setActionLog((current) => [`Inmueble ${id} creado en la sesion demo.`, ...current]);
+    setActionLog((current) => [
+      `Inmueble ${id} creado solo en la sesion demo.`,
+      ...current,
+    ]);
+    setIsSaving(false);
   };
 
-  const addDocument = (event: FormEvent<HTMLFormElement>) => {
+  const addDocument = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "createDocument", payload: documentForm }),
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo guardar el documento.");
+      }
+
+      const data = (await response.json()) as PortfolioResponse;
+
+      setPortfolio(data.properties);
+      setDocumentsByProperty(data.documentsByProperty);
+      if (data.created?.propertyId) {
+        setSelectedId(data.created.propertyId);
+      }
+      setDocumentForm((current) => ({ ...current, detail: "" }));
+      setSyncState("D1 activo");
+      setActionLog((current) => [
+        `Documento "${data.created?.label ?? documentForm.label}" guardado en D1.`,
+        ...current,
+      ]);
+      setIsSaving(false);
+      return;
+    } catch {
+      setSyncState("Demo sin conexion");
+    }
+
     const targetId = documentForm.propertyId;
     const newDocument: DocumentRequirement = {
       label: documentForm.label || "Documento",
@@ -394,6 +532,7 @@ export default function Home() {
       `Documento "${newDocument.label}" registrado para ${targetId}.`,
       ...current,
     ]);
+    setIsSaving(false);
   };
 
   return (
@@ -483,7 +622,7 @@ export default function Home() {
             </div>
             <div className="topbar-actions">
               <div className="user-badge">
-                <span>Sesion demo</span>
+                <span>{syncState}</span>
                 <strong>KatnissCapital</strong>
               </div>
               <label className="search-box">
@@ -649,7 +788,7 @@ export default function Home() {
               <div className="actions-hero">
                 <div>
                   <p className="eyebrow">Operativa</p>
-                  <h3>Altas y documentos listos para conectar a la base de datos.</h3>
+                  <h3>Altas y documentos guardados en la base de datos de la app.</h3>
                 </div>
                 <span>{portfolio.length} inmuebles en cartera</span>
               </div>
@@ -726,7 +865,9 @@ export default function Home() {
                     />
                   </label>
 
-                  <button type="submit">Crear inmueble</button>
+                  <button type="submit" disabled={isSaving}>
+                    {isSaving ? "Guardando..." : "Crear inmueble"}
+                  </button>
                 </form>
 
                 <form className="action-form" onSubmit={addDocument}>
@@ -802,7 +943,9 @@ export default function Home() {
                     />
                   </label>
 
-                  <button type="submit">Registrar documento</button>
+                  <button type="submit" disabled={isSaving}>
+                    {isSaving ? "Guardando..." : "Registrar documento"}
+                  </button>
                 </form>
               </div>
 

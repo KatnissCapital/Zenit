@@ -743,6 +743,11 @@ h3 {
   font-weight: 820;
 }
 
+.action-form button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 .action-log article {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
