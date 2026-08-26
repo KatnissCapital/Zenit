@@ -356,6 +356,7 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [importText, setImportText] = useState(importSample);
   const [importMessage, setImportMessage] = useState("Plantilla lista para pegar datos reales.");
+  const [importFileName, setImportFileName] = useState("Sin archivo seleccionado");
   const hideAmounts = activeRole === "Invitado";
   const visibleNavigation = hideAmounts
     ? navigation.filter((item) => item !== "Acciones" && item !== "Importacion")
@@ -623,9 +624,20 @@ export default function Home() {
   const previewImport = () => {
     setImportMessage(
       readyImportRows.length === 0
-        ? "No hay filas listas: revisa que cada inmueble tenga nombre y direccion."
+        ? "No hay filas listas: revisa que existan columnas nombre y direccion."
         : `${readyImportRows.length} inmueble${readyImportRows.length === 1 ? "" : "s"} listo${readyImportRows.length === 1 ? "" : "s"} para importar.`,
     );
+  };
+
+  const loadImportFile = async (file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+
+    const text = await file.text();
+    setImportText(text);
+    setImportFileName(file.name);
+    setImportMessage(`Archivo "${file.name}" cargado para revisar.`);
   };
 
   const importProperties = async () => {
@@ -950,8 +962,17 @@ export default function Home() {
                 <section className="import-panel">
                   <div>
                     <p className="eyebrow">Plantilla CSV</p>
-                    <h3>Pegar datos estructurados</h3>
+                    <h3>Seleccionar archivo o pegar datos</h3>
                   </div>
+                  <label className="import-file">
+                    <span>Archivo CSV</span>
+                    <input
+                      type="file"
+                      accept=".csv,text/csv,.txt"
+                      onChange={(event) => void loadImportFile(event.target.files?.[0])}
+                    />
+                    <strong>{importFileName}</strong>
+                  </label>
                   <textarea
                     value={importText}
                     onChange={(event) => setImportText(event.target.value)}
@@ -1392,10 +1413,11 @@ function parseImportRows(text: string): ImportRow[] {
     return [];
   }
 
-  const headers = headerLine.split(";").map((header) => header.trim().toLowerCase());
+  const separator = detectSeparator(headerLine);
+  const headers = splitCsvLine(headerLine, separator).map(normalizeHeader);
 
   return lines.map((line) => {
-    const values = splitCsvLine(line);
+    const values = splitCsvLine(line, separator);
     const row = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
 
     return {
@@ -1419,7 +1441,24 @@ function parseImportRows(text: string): ImportRow[] {
   });
 }
 
-function splitCsvLine(line: string) {
+function detectSeparator(line: string) {
+  const candidates = [";", "\t", ","];
+  return candidates.reduce((best, candidate) =>
+    line.split(candidate).length > line.split(best).length ? candidate : best,
+  );
+}
+
+function normalizeHeader(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function splitCsvLine(line: string, separator: string) {
   const values: string[] = [];
   let current = "";
   let quoted = false;
@@ -1430,7 +1469,7 @@ function splitCsvLine(line: string) {
       continue;
     }
 
-    if (character === ";" && !quoted) {
+    if (character === separator && !quoted) {
       values.push(current.trim());
       current = "";
       continue;

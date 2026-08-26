@@ -771,6 +771,34 @@ h3 {
   outline: none;
 }
 
+.import-file {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.35fr) minmax(220px, 1fr) minmax(160px, 0.55fr);
+  gap: 10px;
+  align-items: center;
+  border-radius: 8px;
+  background: #f5f7f3;
+  padding: 12px;
+}
+
+.import-file span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.import-file input {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.import-file strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  text-align: right;
+}
+
 .import-panel textarea:focus {
   border-color: rgba(36, 87, 166, 0.62);
   box-shadow: 0 0 0 3px rgba(36, 87, 166, 0.1);
@@ -1594,8 +1622,13 @@ h3 {
   }
 
   .import-summary,
-  .import-table > div {
+  .import-table > div,
+  .import-file {
     grid-template-columns: 1fr;
+  }
+
+  .import-file strong {
+    text-align: left;
   }
 
   .document-row {
