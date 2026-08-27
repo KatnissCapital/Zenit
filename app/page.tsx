@@ -38,6 +38,7 @@ type Property = {
 };
 
 type DocumentStatus = "ok" | "pending" | "review" | "locked";
+type ExpenseStatus = "Pendiente" | "Pagado" | "Revisado";
 
 type DocumentRequirement = {
   label: string;
@@ -58,6 +59,40 @@ type DocumentForm = {
   label: string;
   detail: string;
   status: DocumentStatus;
+};
+
+type Expense = {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  invoiceDate: string;
+  paymentDate: string;
+  category: string;
+  supplierName: string;
+  supplierTaxId: string;
+  concept: string;
+  taxBase: number;
+  vat: number;
+  withholding: number;
+  total: number;
+  status: ExpenseStatus;
+  documentUrl: string;
+};
+
+type ExpenseForm = {
+  propertyId: string;
+  invoiceDate: string;
+  paymentDate: string;
+  category: string;
+  supplierName: string;
+  supplierTaxId: string;
+  concept: string;
+  taxBase: number;
+  vat: number;
+  withholding: number;
+  total: number;
+  status: ExpenseStatus;
+  documentUrl: string;
 };
 
 type ImportRow = {
@@ -89,6 +124,7 @@ type PropertyEditForm = ImportRow & {
 type PortfolioResponse = {
   properties: Property[];
   documentsByProperty: Record<string, DocumentRequirement[]>;
+  expenses: Expense[];
   persisted: boolean;
   message: string;
   created?: {
@@ -344,7 +380,56 @@ const storageRows = [
   ["Documentos sensibles", "Metadatos primero", "Sin copiar archivos"],
 ];
 
-const navigation = ["Dashboard", "Inmuebles", "Documentos", "Importacion", "Acciones", "Finanzas", "Mercado", "Configuracion"];
+const demoExpenses: Expense[] = [
+  {
+    id: "exp-mad-001",
+    propertyId: "MAD-014",
+    propertyName: "Piso Salamanca",
+    invoiceDate: "2026-01-18",
+    paymentDate: "2026-01-20",
+    category: "Mantenimiento",
+    supplierName: "Reparaciones Ortega",
+    supplierTaxId: "B88441231",
+    concept: "Revision caldera",
+    taxBase: 180,
+    vat: 38,
+    withholding: 0,
+    total: 218,
+    status: "Revisado",
+    documentUrl: "Drive / MAD-014 / Facturas",
+  },
+  {
+    id: "exp-val-001",
+    propertyId: "VAL-003",
+    propertyName: "Atico Ruzafa",
+    invoiceDate: "2026-02-05",
+    paymentDate: "",
+    category: "Seguro",
+    supplierName: "Mutua Madrilena",
+    supplierTaxId: "V28027118",
+    concept: "Poliza hogar anual",
+    taxBase: 355,
+    vat: 0,
+    withholding: 0,
+    total: 355,
+    status: "Pendiente",
+    documentUrl: "Drive / VAL-003 / Seguro",
+  },
+];
+
+const expenseCategories = [
+  "Mantenimiento",
+  "Reparacion",
+  "Comunidad",
+  "Seguro",
+  "IBI",
+  "Basuras",
+  "Suministros",
+  "Financiacion",
+  "Otros",
+];
+
+const navigation = ["Dashboard", "Inmuebles", "Documentos", "Gastos", "Importacion", "Acciones", "Finanzas", "Mercado", "Configuracion"];
 const userRoles: UserRole[] = ["Administrador", "Gestor", "Financiero", "Auditor", "Invitado"];
 
 const importTemplateUrl = "/katniss-import-template.csv";
@@ -393,6 +478,22 @@ const emptyEditForm: PropertyEditForm = {
   nextReview: "Pendiente",
 };
 
+const emptyExpenseForm: ExpenseForm = {
+  propertyId: properties[0].id,
+  invoiceDate: new Date().toISOString().slice(0, 10),
+  paymentDate: "",
+  category: "Mantenimiento",
+  supplierName: "",
+  supplierTaxId: "",
+  concept: "",
+  taxBase: 0,
+  vat: 0,
+  withholding: 0,
+  total: 0,
+  status: "Pendiente",
+  documentUrl: "",
+};
+
 const euro = new Intl.NumberFormat("es-ES", {
   style: "currency",
   currency: "EUR",
@@ -405,6 +506,7 @@ export default function Home() {
   const [activeRole, setActiveRole] = useState<UserRole>("Administrador");
   const [portfolio, setPortfolio] = useState<Property[]>(properties);
   const [documentsByProperty, setDocumentsByProperty] = useState(documentRequirements);
+  const [expenses, setExpenses] = useState<Expense[]>(demoExpenses);
   const [selectedId, setSelectedId] = useState(properties[0].id);
   const [propertyForm, setPropertyForm] = useState<PropertyForm>({
     name: "",
@@ -429,13 +531,15 @@ export default function Home() {
   const [importFileName, setImportFileName] = useState("Sin archivo seleccionado");
   const [editForm, setEditForm] = useState<PropertyEditForm>(emptyEditForm);
   const [editMessage, setEditMessage] = useState("Selecciona un inmueble para editarlo.");
+  const [expenseForm, setExpenseForm] = useState<ExpenseForm>(emptyExpenseForm);
+  const [expenseMessage, setExpenseMessage] = useState("Registra gastos reales y exportalos a Excel.");
   const hideAmounts = activeRole === "Invitado";
   const visibleNavigation = hideAmounts
-    ? navigation.filter((item) => item !== "Acciones" && item !== "Importacion")
+    ? navigation.filter((item) => item !== "Acciones" && item !== "Importacion" && item !== "Gastos")
     : navigation;
   const mobileNavigation = hideAmounts
     ? ["Dashboard", "Inmuebles", "Documentos", "Finanzas"]
-    : ["Dashboard", "Inmuebles", "Documentos", "Importacion"];
+    : ["Dashboard", "Inmuebles", "Documentos", "Gastos"];
   const activePortfolio = useMemo(
     () => portfolio.filter((property) => property.status !== "Baja"),
     [portfolio],
@@ -507,6 +611,17 @@ export default function Home() {
     };
   }, [activePortfolio, documentsByProperty]);
 
+  const expenseTotals = useMemo(() => {
+    const taxBase = expenses.reduce((sum, expense) => sum + expense.taxBase, 0);
+    const vat = expenses.reduce((sum, expense) => sum + expense.vat, 0);
+    const withholding = expenses.reduce((sum, expense) => sum + expense.withholding, 0);
+    const total = expenses.reduce((sum, expense) => sum + expense.total, 0);
+    const pending = expenses.filter((expense) => expense.status === "Pendiente").length;
+    const reviewed = expenses.filter((expense) => expense.status === "Revisado").length;
+
+    return { taxBase, vat, withholding, total, pending, reviewed };
+  }, [expenses]);
+
   const importPreview = useMemo(() => parseImportRows(importText), [importText]);
   const readyImportRows = importPreview.filter((row) => row.name && row.address);
   const annualImportAmount = readyImportRows.reduce(
@@ -526,7 +641,7 @@ export default function Home() {
   const changeRole = (role: UserRole) => {
     setActiveRole(role);
 
-    if (role === "Invitado" && (activeView === "Acciones" || activeView === "Importacion")) {
+    if (role === "Invitado" && (activeView === "Acciones" || activeView === "Importacion" || activeView === "Gastos")) {
       setActiveView("Dashboard");
     }
   };
@@ -567,6 +682,13 @@ export default function Home() {
             ? current.propertyId
             : activeProperties[0]?.id ?? data.properties[0].id,
         }));
+        setExpenseForm((current) => ({
+          ...current,
+          propertyId: activeProperties.some((property) => property.id === current.propertyId)
+            ? current.propertyId
+            : activeProperties[0]?.id ?? data.properties[0].id,
+        }));
+        setExpenses(data.expenses ?? []);
         setSyncState(data.persisted ? "D1 activo" : "Demo local");
         setActionLog((current) => [data.message, ...current]);
       } catch {
@@ -606,6 +728,7 @@ export default function Home() {
 
       setPortfolio(data.properties);
       setDocumentsByProperty(data.documentsByProperty);
+      setExpenses(data.expenses ?? []);
       if (data.created?.id) {
         setSelectedId(data.created.id);
         setDocumentForm((current) => ({ ...current, propertyId: data.created?.id ?? current.propertyId }));
@@ -646,6 +769,7 @@ export default function Home() {
       equity: value,
       roe: value > 0 ? Number(((rent * 12 / value) * 100).toFixed(1)) : 0,
       ltv: 0,
+      homeInsuranceCompany: "Pendiente",
       annualCosts: {
         homeInsurance: 0,
         ibi: 0,
@@ -703,6 +827,7 @@ export default function Home() {
 
       setPortfolio(data.properties);
       setDocumentsByProperty(data.documentsByProperty);
+      setExpenses(data.expenses ?? []);
       if (data.created?.propertyId) {
         setSelectedId(data.created.propertyId);
       }
@@ -735,6 +860,69 @@ export default function Home() {
       `Documento "${newDocument.label}" registrado para ${targetId}.`,
       ...current,
     ]);
+    setIsSaving(false);
+  };
+
+  const addExpense = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const computedTotal = expenseForm.total || expenseForm.taxBase + expenseForm.vat - expenseForm.withholding;
+    const payload = { ...expenseForm, total: computedTotal };
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "createExpense", payload }),
+      });
+
+      if (!response.ok) {
+        const error = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(error?.error ?? "No se pudo guardar el gasto.");
+      }
+
+      const data = (await response.json()) as PortfolioResponse;
+
+      setPortfolio(data.properties);
+      setDocumentsByProperty(data.documentsByProperty);
+      setExpenses(data.expenses ?? []);
+      setExpenseForm((current) => ({
+        ...emptyExpenseForm,
+        propertyId: current.propertyId,
+        invoiceDate: new Date().toISOString().slice(0, 10),
+      }));
+      setSyncState("D1 activo");
+      setExpenseMessage("Gasto guardado y listo para exportar.");
+      setActionLog((current) => [`Gasto "${payload.concept || "sin concepto"}" registrado.`, ...current]);
+      setIsSaving(false);
+      return;
+    } catch (error) {
+      setSyncState("Demo sin conexion");
+      setExpenseMessage(error instanceof Error ? error.message : "No se pudo guardar en D1; queda en sesion demo.");
+    }
+
+    const property = activePortfolio.find((item) => item.id === payload.propertyId) ?? selected;
+    const expense: Expense = {
+      id: `demo-exp-${crypto.randomUUID().slice(0, 6)}`,
+      propertyId: payload.propertyId,
+      propertyName: property.name,
+      invoiceDate: payload.invoiceDate,
+      paymentDate: payload.paymentDate,
+      category: payload.category,
+      supplierName: payload.supplierName || "Proveedor pendiente",
+      supplierTaxId: payload.supplierTaxId,
+      concept: payload.concept || "Gasto sin concepto",
+      taxBase: payload.taxBase,
+      vat: payload.vat,
+      withholding: payload.withholding,
+      total: computedTotal,
+      status: payload.status,
+      documentUrl: payload.documentUrl,
+    };
+
+    setExpenses((current) => [expense, ...current]);
+    setExpenseForm((current) => ({ ...emptyExpenseForm, propertyId: current.propertyId }));
     setIsSaving(false);
   };
 
@@ -782,6 +970,7 @@ export default function Home() {
 
       setPortfolio(data.properties);
       setDocumentsByProperty(data.documentsByProperty);
+      setExpenses(data.expenses ?? []);
       if (data.imported?.ids[0]) {
         setSelectedId(data.imported.ids[0]);
       }
@@ -841,6 +1030,7 @@ export default function Home() {
 
       setPortfolio(data.properties);
       setDocumentsByProperty(data.documentsByProperty);
+      setExpenses(data.expenses ?? []);
       setSelectedId(editForm.id);
       setDocumentForm((current) => ({ ...current, propertyId: editForm.id }));
       setSyncState("D1 activo");
@@ -883,6 +1073,7 @@ export default function Home() {
 
       setPortfolio(data.properties);
       setDocumentsByProperty(data.documentsByProperty);
+      setExpenses(data.expenses ?? []);
       setSelectedId(activeProperties[0]?.id ?? data.properties[0]?.id ?? properties[0].id);
       setEditForm(emptyEditForm);
       setSyncState("D1 activo");
@@ -924,6 +1115,7 @@ export default function Home() {
 
       setPortfolio(data.properties);
       setDocumentsByProperty(data.documentsByProperty);
+      setExpenses(data.expenses ?? []);
       setSelectedId(activeProperties[0]?.id ?? data.properties[0]?.id ?? properties[0].id);
       setEditForm(emptyEditForm);
       setSyncState("D1 activo");
@@ -965,6 +1157,7 @@ export default function Home() {
 
       setPortfolio(data.properties);
       setDocumentsByProperty(data.documentsByProperty);
+      setExpenses(data.expenses ?? []);
       setSelectedId(activeProperties[0]?.id ?? data.properties[0]?.id ?? properties[0].id);
       setEditForm(emptyEditForm);
       setSyncState("D1 activo");
@@ -1338,6 +1531,195 @@ export default function Home() {
                         </div>
                       );
                     })}
+                  </div>
+                </section>
+              </div>
+            </section>
+          )}
+
+          {activeView === "Gastos" && (
+            <section className="expenses-view" aria-label="Gastos y facturas">
+              <div className="expenses-hero">
+                <div>
+                  <p className="eyebrow">Gastos y facturas</p>
+                  <h3>Control operativo y exportacion para revision fiscal.</h3>
+                </div>
+                <a href="/api/expenses/export" download>
+                  Exportar XLS
+                </a>
+              </div>
+
+              <div className="expense-summary">
+                <Metric label="Base imponible" value={amount(expenseTotals.taxBase)} trend="Gastos registrados" />
+                <Metric label="IVA soportado" value={amount(expenseTotals.vat)} trend="Control fiscal" />
+                <Metric label="Retenciones" value={amount(expenseTotals.withholding)} trend="Si aplica" />
+                <Metric label="Total gastos" value={amount(expenseTotals.total)} trend={`${expenses.length} facturas`} />
+              </div>
+
+              <div className="expenses-grid">
+                <form className="expense-form" onSubmit={addExpense}>
+                  <div>
+                    <p className="eyebrow">Nuevo gasto</p>
+                    <h3>Registrar factura</h3>
+                  </div>
+
+                  <label>
+                    <span>Inmueble</span>
+                    <select
+                      value={expenseForm.propertyId}
+                      onChange={(event) =>
+                        setExpenseForm((current) => ({ ...current, propertyId: event.target.value }))
+                      }
+                    >
+                      {activePortfolio.map((property) => (
+                        <option key={property.id} value={property.id}>
+                          {property.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="form-pair">
+                    <label>
+                      <span>Fecha factura</span>
+                      <input
+                        type="date"
+                        value={expenseForm.invoiceDate}
+                        onChange={(event) =>
+                          setExpenseForm((current) => ({ ...current, invoiceDate: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      <span>Fecha pago</span>
+                      <input
+                        type="date"
+                        value={expenseForm.paymentDate}
+                        onChange={(event) =>
+                          setExpenseForm((current) => ({ ...current, paymentDate: event.target.value }))
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  <div className="form-pair">
+                    <label>
+                      <span>Categoria</span>
+                      <select
+                        value={expenseForm.category}
+                        onChange={(event) =>
+                          setExpenseForm((current) => ({ ...current, category: event.target.value }))
+                        }
+                      >
+                        {expenseCategories.map((category) => (
+                          <option key={category}>{category}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Estado</span>
+                      <select
+                        value={expenseForm.status}
+                        onChange={(event) =>
+                          setExpenseForm((current) => ({ ...current, status: event.target.value as ExpenseStatus }))
+                        }
+                      >
+                        <option>Pendiente</option>
+                        <option>Pagado</option>
+                        <option>Revisado</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="form-pair">
+                    <label>
+                      <span>Proveedor</span>
+                      <input
+                        value={expenseForm.supplierName}
+                        onChange={(event) =>
+                          setExpenseForm((current) => ({ ...current, supplierName: event.target.value }))
+                        }
+                        placeholder="Nombre proveedor"
+                      />
+                    </label>
+                    <label>
+                      <span>NIF proveedor</span>
+                      <input
+                        value={expenseForm.supplierTaxId}
+                        onChange={(event) =>
+                          setExpenseForm((current) => ({ ...current, supplierTaxId: event.target.value }))
+                        }
+                        placeholder="B00000000"
+                      />
+                    </label>
+                  </div>
+
+                  <label>
+                    <span>Concepto</span>
+                    <input
+                      value={expenseForm.concept}
+                      onChange={(event) =>
+                        setExpenseForm((current) => ({ ...current, concept: event.target.value }))
+                      }
+                      placeholder="Reparacion persiana, cuota comunidad..."
+                    />
+                  </label>
+
+                  <div className="form-pair">
+                    <NumberField label="Base imponible" value={expenseForm.taxBase} onChange={(value) => setExpenseForm((current) => ({ ...current, taxBase: value, total: value + current.vat - current.withholding }))} />
+                    <NumberField label="IVA" value={expenseForm.vat} onChange={(value) => setExpenseForm((current) => ({ ...current, vat: value, total: current.taxBase + value - current.withholding }))} />
+                  </div>
+
+                  <div className="form-pair">
+                    <NumberField label="Retencion" value={expenseForm.withholding} onChange={(value) => setExpenseForm((current) => ({ ...current, withholding: value, total: current.taxBase + current.vat - value }))} />
+                    <NumberField label="Total factura" value={expenseForm.total} onChange={(value) => setExpenseForm((current) => ({ ...current, total: value }))} />
+                  </div>
+
+                  <label>
+                    <span>Factura o enlace Drive</span>
+                    <input
+                      value={expenseForm.documentUrl}
+                      onChange={(event) =>
+                        setExpenseForm((current) => ({ ...current, documentUrl: event.target.value }))
+                      }
+                      placeholder="Drive / Inmueble / Facturas / factura.pdf"
+                    />
+                  </label>
+
+                  <button type="submit" disabled={isSaving}>
+                    {isSaving ? "Guardando..." : "Registrar gasto"}
+                  </button>
+                  <p className="import-note">{expenseMessage}</p>
+                </form>
+
+                <section className="expense-list-panel">
+                  <div className="section-head compact">
+                    <div>
+                      <p className="eyebrow">Control AEAT</p>
+                      <h3>{expenses.length} gastos registrados</h3>
+                    </div>
+                    <span>{expenseTotals.pending}</span>
+                  </div>
+
+                  <div className="expense-table" role="table" aria-label="Gastos registrados">
+                    <div role="row">
+                      <span>Fecha</span>
+                      <span>Inmueble</span>
+                      <span>Categoria</span>
+                      <span>Proveedor</span>
+                      <span>Total</span>
+                      <span>Estado</span>
+                    </div>
+                    {expenses.map((expense) => (
+                      <div key={expense.id} role="row">
+                        <span>{expense.invoiceDate}</span>
+                        <strong>{expense.propertyName}</strong>
+                        <span>{expense.category}</span>
+                        <span>{expense.supplierName}</span>
+                        <strong className="sensitive-value">{amount(expense.total)}</strong>
+                        <span className={`expense-status ${expense.status.toLowerCase()}`}>{expense.status}</span>
+                      </div>
+                    ))}
                   </div>
                 </section>
               </div>

@@ -73,6 +73,24 @@ export const schemaStatements = [
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );`,
 
+  `CREATE TABLE IF NOT EXISTS expenses (
+  id TEXT PRIMARY KEY,
+  property_id TEXT NOT NULL REFERENCES properties(id),
+  invoice_date TEXT NOT NULL,
+  payment_date TEXT,
+  category TEXT NOT NULL,
+  supplier_name TEXT NOT NULL,
+  supplier_tax_id TEXT,
+  concept TEXT NOT NULL,
+  tax_base_cents INTEGER NOT NULL DEFAULT 0,
+  vat_cents INTEGER NOT NULL DEFAULT 0,
+  withholding_cents INTEGER NOT NULL DEFAULT 0,
+  total_cents INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL,
+  document_url TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);`,
+
   `CREATE TABLE IF NOT EXISTS alerts (
   id TEXT PRIMARY KEY,
   property_id TEXT REFERENCES properties(id),
@@ -96,6 +114,7 @@ export const schemaStatements = [
   `CREATE INDEX IF NOT EXISTS idx_leases_property_id ON leases(property_id);`,
   `CREATE INDEX IF NOT EXISTS idx_property_costs_property_year ON property_costs(property_id, period_year);`,
   `CREATE INDEX IF NOT EXISTS idx_documents_property_status ON documents(property_id, status);`,
+  `CREATE INDEX IF NOT EXISTS idx_expenses_property_date ON expenses(property_id, invoice_date);`,
   `CREATE INDEX IF NOT EXISTS idx_alerts_status_due_at ON alerts(status, due_at);`,
   `CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);`,
   `PRAGMA optimize;`,

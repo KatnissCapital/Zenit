@@ -4,6 +4,7 @@ import { schemaStatements } from "@/db/schema";
 export const dynamic = "force-dynamic";
 
 type DocumentStatus = "ok" | "pending" | "review" | "locked";
+type ExpenseStatus = "Pendiente" | "Pagado" | "Revisado";
 
 type Property = {
   id: string;
@@ -46,9 +47,28 @@ type DocumentRequirement = {
   detail: string;
 };
 
+type Expense = {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  invoiceDate: string;
+  paymentDate: string;
+  category: string;
+  supplierName: string;
+  supplierTaxId: string;
+  concept: string;
+  taxBase: number;
+  vat: number;
+  withholding: number;
+  total: number;
+  status: ExpenseStatus;
+  documentUrl: string;
+};
+
 type PortfolioResponse = {
   properties: Property[];
   documentsByProperty: Record<string, DocumentRequirement[]>;
+  expenses: Expense[];
   persisted: boolean;
   message: string;
 };
@@ -66,6 +86,22 @@ type DocumentInput = {
   label?: string;
   detail?: string;
   status?: DocumentStatus;
+};
+
+type ExpenseInput = {
+  propertyId?: string;
+  invoiceDate?: string;
+  paymentDate?: string;
+  category?: string;
+  supplierName?: string;
+  supplierTaxId?: string;
+  concept?: string;
+  taxBase?: number;
+  vat?: number;
+  withholding?: number;
+  total?: number;
+  status?: ExpenseStatus;
+  documentUrl?: string;
 };
 
 type ImportPropertyInput = {
@@ -125,6 +161,24 @@ type DocumentRow = {
   title: string;
   status: DocumentStatus;
   extracted_json: string | null;
+};
+
+type ExpenseRow = {
+  id: string;
+  property_id: string;
+  property_name: string;
+  invoice_date: string;
+  payment_date: string | null;
+  category: string;
+  supplier_name: string;
+  supplier_tax_id: string | null;
+  concept: string;
+  tax_base_cents: number;
+  vat_cents: number;
+  withholding_cents: number;
+  total_cents: number;
+  status: ExpenseStatus;
+  document_url: string | null;
 };
 
 const seedProperties: Property[] = [
@@ -309,6 +363,55 @@ const seedDocuments: Record<string, DocumentRequirement[]> = {
   ],
 };
 
+const seedExpenses: Expense[] = [
+  {
+    id: "exp-mad-001",
+    propertyId: "MAD-014",
+    propertyName: "Piso Salamanca",
+    invoiceDate: "2026-01-18",
+    paymentDate: "2026-01-20",
+    category: "Mantenimiento",
+    supplierName: "Reparaciones Ortega",
+    supplierTaxId: "B88441231",
+    concept: "Revision caldera",
+    taxBase: 180,
+    vat: 38,
+    withholding: 0,
+    total: 218,
+    status: "Revisado",
+    documentUrl: "Drive / MAD-014 / Facturas",
+  },
+  {
+    id: "exp-val-001",
+    propertyId: "VAL-003",
+    propertyName: "Atico Ruzafa",
+    invoiceDate: "2026-02-05",
+    paymentDate: "",
+    category: "Seguro",
+    supplierName: "Mutua Madrilena",
+    supplierTaxId: "V28027118",
+    concept: "Poliza hogar anual",
+    taxBase: 355,
+    vat: 0,
+    withholding: 0,
+    total: 355,
+    status: "Pendiente",
+    documentUrl: "Drive / VAL-003 / Seguro",
+  },
+];
+
+const expenseCategories = [
+  "Mantenimiento",
+  "Reparacion",
+  "Comunidad",
+  "Seguro",
+  "IBI",
+  "Basuras",
+  "Suministros",
+  "Financiacion",
+  "Otros",
+];
+
 const checklistLabels = [
   "Contrato alquiler",
   "Seguro vivienda",
@@ -328,6 +431,7 @@ export async function GET() {
       return json({
         properties: seedProperties,
         documentsByProperty: seedDocuments,
+        expenses: seedExpenses,
         persisted: false,
         message: "Modo demo local",
       });
@@ -345,6 +449,7 @@ export async function GET() {
     return json({
       properties: seedProperties,
       documentsByProperty: seedDocuments,
+      expenses: seedExpenses,
       persisted: false,
       message: "Modo demo sin conexion a D1",
     });
@@ -365,6 +470,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as
       | { action: "createProperty"; payload: PropertyInput }
       | { action: "createDocument"; payload: DocumentInput }
+      | { action: "createExpense"; payload: ExpenseInput }
       | { action: "importProperties"; payload: { rows?: ImportPropertyInput[] } }
       | { action: "updateProperty"; payload: PropertyUpdateInput }
       | { action: "deactivateProperty"; payload: { id?: string } }
@@ -378,6 +484,11 @@ export async function POST(request: Request) {
 
     if (body.action === "createDocument") {
       const created = await createDocument(database, body.payload);
+      return json({ ...(await readPortfolio(database)), created, persisted: true });
+    }
+
+    if (body.action === "createExpense") {
+      const created = await createExpense(database, body.payload);
       return json({ ...(await readPortfolio(database)), created, persisted: true });
     }
 
@@ -570,6 +681,35 @@ async function seedDatabaseIfEmpty(database: D1Database) {
     }
   }
 
+  for (const expense of seedExpenses) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT INTO expenses (
+            id, property_id, invoice_date, payment_date, category, supplier_name,
+            supplier_tax_id, concept, tax_base_cents, vat_cents, withholding_cents,
+            total_cents, status, document_url
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          expense.id,
+          expense.propertyId,
+          expense.invoiceDate,
+          expense.paymentDate || null,
+          expense.category,
+          expense.supplierName,
+          expense.supplierTaxId,
+          expense.concept,
+          toCents(expense.taxBase),
+          toCents(expense.vat),
+          toCents(expense.withholding),
+          toCents(expense.total),
+          expense.status,
+          expense.documentUrl || null,
+        ),
+    );
+  }
+
   await database.batch(statements);
 }
 
@@ -630,8 +770,32 @@ async function readPortfolio(database: D1Database): Promise<Omit<PortfolioRespon
   }
 
   const properties = (propertiesResult.results ?? []).map((row) => mapProperty(row));
+  const expensesResult = await database
+    .prepare(
+      `SELECT
+        e.id,
+        e.property_id,
+        p.name AS property_name,
+        e.invoice_date,
+        e.payment_date,
+        e.category,
+        e.supplier_name,
+        e.supplier_tax_id,
+        e.concept,
+        e.tax_base_cents,
+        e.vat_cents,
+        e.withholding_cents,
+        e.total_cents,
+        e.status,
+        e.document_url
+      FROM expenses e
+      LEFT JOIN properties p ON p.id = e.property_id
+      ORDER BY e.invoice_date DESC, e.created_at DESC`,
+    )
+    .all<ExpenseRow>();
+  const expenses = (expensesResult.results ?? []).map((row) => mapExpense(row));
 
-  return { properties, documentsByProperty };
+  return { properties, documentsByProperty, expenses };
 }
 
 async function createProperty(database: D1Database, input: PropertyInput) {
@@ -730,6 +894,61 @@ async function createDocument(database: D1Database, input: DocumentInput) {
   ]);
 
   return { propertyId, label, status, detail };
+}
+
+async function createExpense(database: D1Database, input: ExpenseInput) {
+  const propertyId = sanitizeText(input.propertyId, "");
+  const property = await database
+    .prepare("SELECT id FROM properties WHERE id = ?")
+    .bind(propertyId)
+    .first<{ id: string }>();
+
+  if (!property) {
+    throw new Error("Inmueble no encontrado.");
+  }
+
+  const taxBase = Number(input.taxBase ?? 0);
+  const vat = Number(input.vat ?? 0);
+  const withholding = Number(input.withholding ?? 0);
+  const total = Number(input.total ?? taxBase + vat - withholding);
+  const category = sanitizeExpenseCategory(input.category);
+  const status = sanitizeExpenseStatus(input.status);
+  const id = `exp-${propertyId}-${crypto.randomUUID().slice(0, 8)}`;
+
+  await database.batch([
+    database
+      .prepare(
+        `INSERT INTO expenses (
+          id, property_id, invoice_date, payment_date, category, supplier_name,
+          supplier_tax_id, concept, tax_base_cents, vat_cents, withholding_cents,
+          total_cents, status, document_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id,
+        propertyId,
+        sanitizeDate(input.invoiceDate),
+        input.paymentDate ? sanitizeDate(input.paymentDate) : null,
+        category,
+        sanitizeText(input.supplierName, "Proveedor pendiente"),
+        sanitizeText(input.supplierTaxId, ""),
+        sanitizeText(input.concept, "Gasto sin concepto"),
+        toCents(taxBase),
+        toCents(vat),
+        toCents(withholding),
+        toCents(total),
+        status,
+        sanitizeText(input.documentUrl, ""),
+      ),
+    database
+      .prepare(
+        `INSERT INTO audit_log (id, entity_type, entity_id, action, changes_json)
+        VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(`audit-${crypto.randomUUID()}`, "expense", id, "create", JSON.stringify(input)),
+  ]);
+
+  return { id };
 }
 
 async function updateProperty(database: D1Database, input: PropertyUpdateInput) {
@@ -1200,6 +1419,26 @@ function mapProperty(row: PropertyRow): Property {
   };
 }
 
+function mapExpense(row: ExpenseRow): Expense {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    propertyName: row.property_name ?? row.property_id,
+    invoiceDate: row.invoice_date,
+    paymentDate: row.payment_date ?? "",
+    category: row.category,
+    supplierName: row.supplier_name,
+    supplierTaxId: row.supplier_tax_id ?? "",
+    concept: row.concept,
+    taxBase: fromCents(row.tax_base_cents),
+    vat: fromCents(row.vat_cents),
+    withholding: fromCents(row.withholding_cents),
+    total: fromCents(row.total_cents),
+    status: row.status,
+    documentUrl: row.document_url ?? "",
+  };
+}
+
 function readDocumentDetail(value: string | null) {
   if (!value) {
     return "Sin detalle";
@@ -1216,6 +1455,19 @@ function readDocumentDetail(value: string | null) {
 function sanitizeText(value: string | undefined, fallback: string) {
   const text = value?.trim();
   return text ? text.slice(0, 240) : fallback;
+}
+
+function sanitizeDate(value: string | undefined) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value ?? "") ? value : new Date().toISOString().slice(0, 10);
+}
+
+function sanitizeExpenseCategory(value: string | undefined) {
+  const clean = sanitizeText(value, "Otros");
+  return expenseCategories.includes(clean) ? clean : "Otros";
+}
+
+function sanitizeExpenseStatus(value: ExpenseStatus | undefined): ExpenseStatus {
+  return value === "Pagado" || value === "Revisado" ? value : "Pendiente";
 }
 
 function toCents(value: number) {
