@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS property_costs (
   id TEXT PRIMARY KEY,
   property_id TEXT NOT NULL REFERENCES properties(id),
   period_year INTEGER NOT NULL,
+  home_insurance_company TEXT NOT NULL DEFAULT 'Pendiente',
   home_insurance_cents INTEGER NOT NULL DEFAULT 0,
   ibi_cents INTEGER NOT NULL DEFAULT 0,
   waste_tax_cents INTEGER NOT NULL DEFAULT 0,

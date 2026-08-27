@@ -25,6 +25,7 @@ type Property = {
   roe: number;
   ltv: number;
   cashflowAnnual: number;
+  homeInsuranceCompany: string;
   annualCosts: {
     homeInsurance: number;
     ibi: number;
@@ -83,6 +84,7 @@ type ImportPropertyInput = {
   financing?: number;
   maintenance?: number;
   debtBalance?: number;
+  homeInsuranceCompany?: string;
   utilitiesAssumedByTenant?: boolean;
   driveFolder?: string;
   nextReview?: string;
@@ -103,6 +105,7 @@ type PropertyRow = {
   current_rent_cents: number | null;
   tenant_name: string | null;
   next_review_date: string | null;
+  home_insurance_company: string | null;
   home_insurance_cents: number | null;
   ibi_cents: number | null;
   waste_tax_cents: number | null;
@@ -145,6 +148,7 @@ const seedProperties: Property[] = [
     roe: 4.6,
     ltv: 57.9,
     cashflowAnnual: 8280,
+    homeInsuranceCompany: "Mapfre",
     annualCosts: {
       homeInsurance: 410,
       ibi: 780,
@@ -178,6 +182,7 @@ const seedProperties: Property[] = [
     roe: 5.3,
     ltv: 53.8,
     cashflowAnnual: 7004,
+    homeInsuranceCompany: "Mutua Madrilena",
     annualCosts: {
       homeInsurance: 355,
       ibi: 520,
@@ -211,6 +216,7 @@ const seedProperties: Property[] = [
     roe: 3.8,
     ltv: 60.5,
     cashflowAnnual: 7650,
+    homeInsuranceCompany: "Allianz",
     annualCosts: {
       homeInsurance: 690,
       ibi: 1380,
@@ -244,6 +250,7 @@ const seedProperties: Property[] = [
     roe: 1.5,
     ltv: 49.6,
     cashflowAnnual: 1756,
+    homeInsuranceCompany: "Linea Directa",
     annualCosts: {
       homeInsurance: 330,
       ibi: 460,
@@ -436,6 +443,12 @@ async function ensureFinancialColumns(database: D1Database) {
     );
   }
 
+  if (!existing.has("home_insurance_company")) {
+    statements.push(
+      database.prepare("ALTER TABLE property_costs ADD COLUMN home_insurance_company TEXT NOT NULL DEFAULT 'Pendiente'"),
+    );
+  }
+
   if (statements.length > 0) {
     await database.batch(statements);
   }
@@ -472,15 +485,16 @@ async function seedDatabaseIfEmpty(database: D1Database) {
       database
         .prepare(
           `INSERT INTO property_costs (
-            id, property_id, period_year, home_insurance_cents, ibi_cents,
+            id, property_id, period_year, home_insurance_company, home_insurance_cents, ibi_cents,
             waste_tax_cents, community_cents, rent_insurance_cents, financing_cents,
             maintenance_cents, debt_balance_cents, utilities_assumed_by_tenant
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           `cost-${property.id}`,
           property.id,
           2026,
+          property.homeInsuranceCompany,
           toCents(property.annualCosts.homeInsurance),
           toCents(property.annualCosts.ibi),
           toCents(property.annualCosts.wasteTax),
@@ -574,6 +588,7 @@ async function readPortfolio(database: D1Database): Promise<Omit<PortfolioRespon
         l.status AS lease_status,
         l.next_review_date,
         t.display_name AS tenant_name,
+        c.home_insurance_company,
         c.home_insurance_cents,
         c.ibi_cents,
         c.waste_tax_cents,
@@ -755,11 +770,12 @@ async function updateProperty(database: D1Database, input: PropertyUpdateInput) 
     database
       .prepare(
         `INSERT INTO property_costs (
-          id, property_id, period_year, home_insurance_cents, ibi_cents,
+          id, property_id, period_year, home_insurance_company, home_insurance_cents, ibi_cents,
           waste_tax_cents, community_cents, rent_insurance_cents, financing_cents,
           maintenance_cents, debt_balance_cents, utilities_assumed_by_tenant
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
+          home_insurance_company = excluded.home_insurance_company,
           home_insurance_cents = excluded.home_insurance_cents,
           ibi_cents = excluded.ibi_cents,
           waste_tax_cents = excluded.waste_tax_cents,
@@ -775,6 +791,7 @@ async function updateProperty(database: D1Database, input: PropertyUpdateInput) 
         `cost-${id}`,
         id,
         new Date().getFullYear(),
+        sanitizeText(input.homeInsuranceCompany, "Pendiente"),
         toCents(Number(input.homeInsurance ?? 0)),
         toCents(Number(input.ibi ?? 0)),
         toCents(Number(input.wasteTax ?? 0)),
@@ -982,11 +999,12 @@ async function importProperties(database: D1Database, rows: ImportPropertyInput[
       database
         .prepare(
           `INSERT INTO property_costs (
-            id, property_id, period_year, home_insurance_cents, ibi_cents,
+            id, property_id, period_year, home_insurance_company, home_insurance_cents, ibi_cents,
             waste_tax_cents, community_cents, rent_insurance_cents, financing_cents,
             maintenance_cents, debt_balance_cents, utilities_assumed_by_tenant
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
+            home_insurance_company = excluded.home_insurance_company,
             home_insurance_cents = excluded.home_insurance_cents,
             ibi_cents = excluded.ibi_cents,
             waste_tax_cents = excluded.waste_tax_cents,
@@ -1001,6 +1019,7 @@ async function importProperties(database: D1Database, rows: ImportPropertyInput[
           `cost-${id}`,
           id,
           new Date().getFullYear(),
+          sanitizeText(row.homeInsuranceCompany, "Pendiente"),
           toCents(Number(row.homeInsurance ?? 0)),
           toCents(Number(row.ibi ?? 0)),
           toCents(Number(row.wasteTax ?? 0)),
@@ -1170,6 +1189,7 @@ function mapProperty(row: PropertyRow): Property {
     roe: equity > 0 ? Number(((cashflowAnnual / equity) * 100).toFixed(1)) : 0,
     ltv: value > 0 ? Number(((debtBalance / value) * 100).toFixed(1)) : 0,
     cashflowAnnual,
+    homeInsuranceCompany: row.home_insurance_company ?? "Pendiente",
     annualCosts,
     utilitiesAssumedByTenant: row.utilities_assumed_by_tenant === 1,
     driveFolder: row.drive_folder_url ?? `Drive / ${row.id}`,

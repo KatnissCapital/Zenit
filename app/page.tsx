@@ -22,6 +22,7 @@ type Property = {
   roe: number;
   ltv: number;
   cashflowAnnual: number;
+  homeInsuranceCompany: string;
   annualCosts: {
     homeInsurance: number;
     ibi: number;
@@ -75,6 +76,7 @@ type ImportRow = {
   financing: number;
   maintenance: number;
   debtBalance: number;
+  homeInsuranceCompany: string;
   utilitiesAssumedByTenant: boolean;
   driveFolder: string;
   nextReview: string;
@@ -135,6 +137,7 @@ const properties: Property[] = [
     roe: 4.6,
     ltv: 57.9,
     cashflowAnnual: 8280,
+    homeInsuranceCompany: "Mapfre",
     annualCosts: {
       homeInsurance: 410,
       ibi: 780,
@@ -168,6 +171,7 @@ const properties: Property[] = [
     roe: 5.3,
     ltv: 53.8,
     cashflowAnnual: 7004,
+    homeInsuranceCompany: "Mutua Madrilena",
     annualCosts: {
       homeInsurance: 355,
       ibi: 520,
@@ -201,6 +205,7 @@ const properties: Property[] = [
     roe: 3.8,
     ltv: 60.5,
     cashflowAnnual: 7650,
+    homeInsuranceCompany: "Allianz",
     annualCosts: {
       homeInsurance: 690,
       ibi: 1380,
@@ -234,6 +239,7 @@ const properties: Property[] = [
     roe: 1.5,
     ltv: 49.6,
     cashflowAnnual: 1756,
+    homeInsuranceCompany: "Linea Directa",
     annualCosts: {
       homeInsurance: 330,
       ibi: 460,
@@ -382,6 +388,7 @@ const emptyEditForm: PropertyEditForm = {
   financing: 0,
   maintenance: 0,
   utilitiesAssumedByTenant: false,
+  homeInsuranceCompany: "Pendiente",
   driveFolder: "",
   nextReview: "Pendiente",
 };
@@ -452,15 +459,35 @@ export default function Home() {
     const cashflowAnnual = activePortfolio.reduce((sum, property) => sum + property.cashflowAnnual, 0);
     const cashflow = Math.round(cashflowAnnual / 12);
     const pendingDocs = activePortfolio.reduce((sum, property) => sum + property.pendingDocs, 0);
+    const mortgageAnnual = activePortfolio.reduce(
+      (sum, property) => sum + property.annualCosts.financing,
+      0,
+    );
     const annualCosts = activePortfolio.reduce(
       (sum, property) =>
         sum + Object.values(property.annualCosts).reduce((costs, value) => costs + value, 0),
       0,
     );
+    const operatingCostsAnnual = Math.max(0, annualCosts - mortgageAnnual);
+    const deductionsMonthly = Math.round(annualCosts / 12);
     const roe = equity > 0 ? Number(((cashflowAnnual / equity) * 100).toFixed(1)) : 0;
     const ltv = value > 0 ? Number(((debt / value) * 100).toFixed(1)) : 0;
 
-    return { rent, value, debt, equity, cashflow, cashflowAnnual, pendingDocs, annualCosts, roe, ltv };
+    return {
+      rent,
+      value,
+      debt,
+      equity,
+      cashflow,
+      cashflowAnnual,
+      pendingDocs,
+      annualCosts,
+      mortgageAnnual,
+      operatingCostsAnnual,
+      deductionsMonthly,
+      roe,
+      ltv,
+    };
   }, [activePortfolio]);
 
   const documentTotals = useMemo(() => {
@@ -1071,16 +1098,12 @@ export default function Home() {
           <section className="hero-band" aria-label="Resumen de cartera">
             <div className="hero-copy">
               <p className="eyebrow">Cartera activa</p>
-              <h3>{activePortfolio.length} activos, trazabilidad documental y rentabilidad en una vista.</h3>
-              <p>
-                Controla contratos, vencimientos, facturas e incidencias desde un panel
-                preparado para crecer hacia integraciones con Drive, Catastro, INE e Idealista.
-              </p>
             </div>
             <div className="hero-metrics">
-              <Metric label="Valor cartera" value={amount(totals.value)} trend={trend("+3,1%")} />
-              <Metric label="Renta mensual" value={amount(totals.rent)} trend={trend("+4,2%")} />
-              <Metric label="Cash flow anual" value={amount(totals.cashflowAnnual)} trend={rate(totals.roe)} />
+              <Metric label="Valor cartera" value={amount(totals.value)} trend={`${activePortfolio.length} activos`} />
+              <Metric label="Renta mensual" value={amount(totals.rent)} trend="Ingresos" />
+              <Metric label="Cash flow mensual" value={amount(totals.cashflow)} trend="Renta menos restas" />
+              <Metric label="Restas mensuales" value={amount(totals.deductionsMonthly)} trend="Gastos + cuota" />
               <Metric label="Equity total" value={amount(totals.equity)} trend={`LTV ${rate(totals.ltv)}`} />
             </div>
           </section>
@@ -1496,12 +1519,12 @@ export default function Home() {
           )}
 
           {activeView !== "Configuracion" && activeView !== "Importacion" && activeView !== "Acciones" && (
-          <section className="content-grid">
+          <section className={activeView === "Inmuebles" ? "content-grid property-management-grid" : "content-grid"}>
             <div className="main-column">
               <section className="section-head">
                 <div>
                   <p className="eyebrow">Gestion diaria</p>
-                  <h3>Inmuebles prioritarios</h3>
+                  <h3>Inmuebles</h3>
                 </div>
                 <div className="segmented" role="tablist" aria-label="Filtro de inmuebles">
                   <button className="selected">Todos</button>
@@ -1648,6 +1671,17 @@ export default function Home() {
                     <NumberField label="IBI anual" value={editForm.ibi} onChange={(value) => setEditForm((current) => ({ ...current, ibi: value }))} />
                   </div>
 
+                  <label className="wide-label">
+                    <span>Aseguradora hogar</span>
+                    <input
+                      value={editForm.homeInsuranceCompany}
+                      onChange={(event) =>
+                        setEditForm((current) => ({ ...current, homeInsuranceCompany: event.target.value }))
+                      }
+                      placeholder="Mapfre, Mutua, Allianz..."
+                    />
+                  </label>
+
                   <div className="form-pair">
                     <NumberField label="Basuras anual" value={editForm.wasteTax} onChange={(value) => setEditForm((current) => ({ ...current, wasteTax: value }))} />
                     <NumberField label="Comunidad anual" value={editForm.community} onChange={(value) => setEditForm((current) => ({ ...current, community: value }))} />
@@ -1744,6 +1778,7 @@ export default function Home() {
                   <Detail label="Inquilino" value={selected.tenant} />
                   <Detail label="Revision" value={selected.nextReview} />
                   <Detail label="Riesgo" value={selected.risk} />
+                  <Detail label="Aseguradora hogar" value={selected.homeInsuranceCompany} />
                   <Detail label="Cash flow anual" value={amount(selected.cashflowAnnual)} />
                 </div>
 
@@ -1751,6 +1786,10 @@ export default function Home() {
                   <div className="cost-total">
                     <span>Costes anuales controlados</span>
                     <strong>{amount(selectedAnnualCosts)}</strong>
+                  </div>
+                  <div className="cost-total compact-cost">
+                    <span>Restas mensuales</span>
+                    <strong>{amount(Math.round(selectedAnnualCosts / 12))}</strong>
                   </div>
                   <Cost label="Seguro vivienda" value={selected.annualCosts.homeInsurance} hideAmounts={hideAmounts} />
                   <Cost label="IBI" value={selected.annualCosts.ibi} hideAmounts={hideAmounts} />
@@ -1879,6 +1918,7 @@ function parseImportRows(text: string): ImportRow[] {
       financing: parseEuro(row.financiacion),
       maintenance: 0,
       debtBalance: 0,
+      homeInsuranceCompany: "Pendiente",
       utilitiesAssumedByTenant: parseYes(row.suministros_inquilino),
       driveFolder: row.carpeta_drive || "",
       nextReview: row.proxima_revision || "Pendiente",
@@ -1904,6 +1944,7 @@ function propertyToEditForm(property: Property): PropertyEditForm {
     rentInsurance: property.annualCosts.rentInsurance,
     financing: property.annualCosts.financing,
     maintenance: property.annualCosts.maintenance,
+    homeInsuranceCompany: property.homeInsuranceCompany,
     utilitiesAssumedByTenant: property.utilitiesAssumedByTenant,
     driveFolder: property.driveFolder,
     nextReview: property.nextReview,
