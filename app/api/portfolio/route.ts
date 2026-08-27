@@ -80,6 +80,10 @@ type ImportPropertyInput = {
   nextReview?: string;
 };
 
+type PropertyUpdateInput = ImportPropertyInput & {
+  id?: string;
+};
+
 type PropertyRow = {
   id: string;
   name: string;
@@ -320,7 +324,9 @@ export async function POST(request: Request) {
     const body = (await request.json()) as
       | { action: "createProperty"; payload: PropertyInput }
       | { action: "createDocument"; payload: DocumentInput }
-      | { action: "importProperties"; payload: { rows?: ImportPropertyInput[] } };
+      | { action: "importProperties"; payload: { rows?: ImportPropertyInput[] } }
+      | { action: "updateProperty"; payload: PropertyUpdateInput }
+      | { action: "deactivateProperty"; payload: { id?: string } };
 
     if (body.action === "createProperty") {
       const created = await createProperty(database, body.payload);
@@ -335,6 +341,16 @@ export async function POST(request: Request) {
     if (body.action === "importProperties") {
       const imported = await importProperties(database, body.payload.rows ?? []);
       return json({ ...(await readPortfolio(database)), imported, persisted: true });
+    }
+
+    if (body.action === "updateProperty") {
+      const updated = await updateProperty(database, body.payload);
+      return json({ ...(await readPortfolio(database)), updated, persisted: true });
+    }
+
+    if (body.action === "deactivateProperty") {
+      const deactivated = await deactivateProperty(database, body.payload.id);
+      return json({ ...(await readPortfolio(database)), deactivated, persisted: true });
     }
 
     return json({ error: "Accion no soportada." }, 400);
@@ -624,6 +640,147 @@ async function createDocument(database: D1Database, input: DocumentInput) {
   ]);
 
   return { propertyId, label, status, detail };
+}
+
+async function updateProperty(database: D1Database, input: PropertyUpdateInput) {
+  const id = sanitizeText(input.id, "");
+
+  if (!id) {
+    throw new Error("Inmueble no informado.");
+  }
+
+  const existing = await database
+    .prepare("SELECT id FROM properties WHERE id = ?")
+    .bind(id)
+    .first<{ id: string }>();
+
+  if (!existing) {
+    throw new Error("Inmueble no encontrado.");
+  }
+
+  const tenantName = sanitizeText(input.tenant, "Sin inquilino");
+  const hasTenant = tenantName !== "Sin inquilino" && tenantName !== "Pendiente";
+  const statements: D1PreparedStatement[] = [
+    database
+      .prepare(
+        `UPDATE properties
+        SET name = ?, address = ?, asset_type = ?, status = ?, drive_folder_url = ?,
+          market_value_cents = ?
+        WHERE id = ?`,
+      )
+      .bind(
+        sanitizeText(input.name, "Inmueble sin nombre"),
+        sanitizeText(input.address, "Direccion pendiente"),
+        sanitizeText(input.type, "Residencial"),
+        sanitizeText(input.status, "En revision"),
+        sanitizeText(input.driveFolder, `Drive / ${id}`),
+        toCents(Number(input.value ?? 0)),
+        id,
+      ),
+    database
+      .prepare(
+        `INSERT INTO property_costs (
+          id, property_id, period_year, home_insurance_cents, ibi_cents,
+          waste_tax_cents, community_cents, rent_insurance_cents, financing_cents,
+          utilities_assumed_by_tenant
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          home_insurance_cents = excluded.home_insurance_cents,
+          ibi_cents = excluded.ibi_cents,
+          waste_tax_cents = excluded.waste_tax_cents,
+          community_cents = excluded.community_cents,
+          rent_insurance_cents = excluded.rent_insurance_cents,
+          financing_cents = excluded.financing_cents,
+          utilities_assumed_by_tenant = excluded.utilities_assumed_by_tenant,
+          updated_at = CURRENT_TIMESTAMP`,
+      )
+      .bind(
+        `cost-${id}`,
+        id,
+        new Date().getFullYear(),
+        toCents(Number(input.homeInsurance ?? 0)),
+        toCents(Number(input.ibi ?? 0)),
+        toCents(Number(input.wasteTax ?? 0)),
+        toCents(Number(input.community ?? 0)),
+        toCents(Number(input.rentInsurance ?? 0)),
+        toCents(Number(input.financing ?? 0)),
+        input.utilitiesAssumedByTenant ? 1 : 0,
+      ),
+    database
+      .prepare(
+        `INSERT INTO leases (
+          id, property_id, tenant_id, start_date, current_rent_cents, status,
+          next_review_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          tenant_id = excluded.tenant_id,
+          current_rent_cents = excluded.current_rent_cents,
+          status = excluded.status,
+          next_review_date = excluded.next_review_date`,
+      )
+      .bind(
+        `lease-${id}`,
+        id,
+        hasTenant ? `tenant-${id}` : null,
+        new Date().toISOString().slice(0, 10),
+        toCents(Number(input.rent ?? 0)),
+        sanitizeText(input.status, "En revision"),
+        sanitizeText(input.nextReview, "Pendiente"),
+      ),
+    database
+      .prepare(
+        `INSERT INTO audit_log (id, entity_type, entity_id, action, changes_json)
+        VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(`audit-${crypto.randomUUID()}`, "property", id, "update", JSON.stringify(input)),
+  ];
+
+  if (hasTenant) {
+    statements.splice(
+      2,
+      0,
+      database
+        .prepare(
+          `INSERT INTO tenants (id, display_name)
+          VALUES (?, ?)
+          ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name`,
+        )
+        .bind(`tenant-${id}`, tenantName),
+    );
+  }
+
+  await database.batch(statements);
+  return { id };
+}
+
+async function deactivateProperty(database: D1Database, idInput: string | undefined) {
+  const id = sanitizeText(idInput, "");
+
+  if (!id) {
+    throw new Error("Inmueble no informado.");
+  }
+
+  const existing = await database
+    .prepare("SELECT id FROM properties WHERE id = ?")
+    .bind(id)
+    .first<{ id: string }>();
+
+  if (!existing) {
+    throw new Error("Inmueble no encontrado.");
+  }
+
+  await database.batch([
+    database.prepare("UPDATE properties SET status = ? WHERE id = ?").bind("Baja", id),
+    database.prepare("UPDATE leases SET status = ? WHERE property_id = ?").bind("Baja", id),
+    database
+      .prepare(
+        `INSERT INTO audit_log (id, entity_type, entity_id, action, changes_json)
+        VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(`audit-${crypto.randomUUID()}`, "property", id, "deactivate", JSON.stringify({ id })),
+  ]);
+
+  return { id };
 }
 
 async function importProperties(database: D1Database, rows: ImportPropertyInput[]) {

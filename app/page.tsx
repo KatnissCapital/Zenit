@@ -72,6 +72,10 @@ type ImportRow = {
   nextReview: string;
 };
 
+type PropertyEditForm = ImportRow & {
+  id: string;
+};
+
 type PortfolioResponse = {
   properties: Property[];
   documentsByProperty: Record<string, DocumentRequirement[]>;
@@ -85,6 +89,12 @@ type PortfolioResponse = {
   imported?: {
     count: number;
     ids: string[];
+  };
+  updated?: {
+    id: string;
+  };
+  deactivated?: {
+    id: string;
   };
 };
 
@@ -323,6 +333,26 @@ const importSample = `${importHeaders.join(";")}
 Piso Centro;Calle Mayor 12, Madrid;Residencial;Ocupado;Ana Lopez;1200;260000;360;610;65;980;240;4200;si;Drive / Piso Centro;2026-09-15
 Local Norte;Avenida Industria 8, Valencia;Local;En revision;Taller Norte SL;1800;340000;520;920;140;1320;0;7800;si;Drive / Local Norte;2026-10-01`;
 
+const emptyEditForm: PropertyEditForm = {
+  id: "",
+  name: "",
+  address: "",
+  type: "Residencial",
+  status: "En revision",
+  tenant: "Sin inquilino",
+  rent: 0,
+  value: 0,
+  homeInsurance: 0,
+  ibi: 0,
+  wasteTax: 0,
+  community: 0,
+  rentInsurance: 0,
+  financing: 0,
+  utilitiesAssumedByTenant: false,
+  driveFolder: "",
+  nextReview: "Pendiente",
+};
+
 const euro = new Intl.NumberFormat("es-ES", {
   style: "currency",
   currency: "EUR",
@@ -357,6 +387,8 @@ export default function Home() {
   const [importText, setImportText] = useState(importSample);
   const [importMessage, setImportMessage] = useState("Plantilla lista para pegar datos reales.");
   const [importFileName, setImportFileName] = useState("Sin archivo seleccionado");
+  const [editForm, setEditForm] = useState<PropertyEditForm>(emptyEditForm);
+  const [editMessage, setEditMessage] = useState("Selecciona un inmueble para editarlo.");
   const hideAmounts = activeRole === "Invitado";
   const visibleNavigation = hideAmounts
     ? navigation.filter((item) => item !== "Acciones" && item !== "Importacion")
@@ -364,7 +396,15 @@ export default function Home() {
   const mobileNavigation = hideAmounts
     ? ["Dashboard", "Inmuebles", "Documentos", "Finanzas"]
     : ["Dashboard", "Inmuebles", "Documentos", "Importacion"];
-  const selected = portfolio.find((property) => property.id === selectedId) ?? portfolio[0];
+  const activePortfolio = useMemo(
+    () => portfolio.filter((property) => property.status !== "Baja"),
+    [portfolio],
+  );
+  const selected =
+    activePortfolio.find((property) => property.id === selectedId) ??
+    activePortfolio[0] ??
+    portfolio[0] ??
+    properties[0];
   const selectedDocuments = documentsByProperty[selected.id] ?? [];
   const selectedAnnualCosts = Object.values(selected.annualCosts).reduce(
     (sum, value) => sum + value,
@@ -372,21 +412,21 @@ export default function Home() {
   );
 
   const totals = useMemo(() => {
-    const rent = portfolio.reduce((sum, property) => sum + property.rent, 0);
-    const value = portfolio.reduce((sum, property) => sum + property.value, 0);
-    const cashflow = portfolio.reduce((sum, property) => sum + property.cashflow, 0);
-    const pendingDocs = portfolio.reduce((sum, property) => sum + property.pendingDocs, 0);
-    const annualCosts = portfolio.reduce(
+    const rent = activePortfolio.reduce((sum, property) => sum + property.rent, 0);
+    const value = activePortfolio.reduce((sum, property) => sum + property.value, 0);
+    const cashflow = activePortfolio.reduce((sum, property) => sum + property.cashflow, 0);
+    const pendingDocs = activePortfolio.reduce((sum, property) => sum + property.pendingDocs, 0);
+    const annualCosts = activePortfolio.reduce(
       (sum, property) =>
         sum + Object.values(property.annualCosts).reduce((costs, value) => costs + value, 0),
       0,
     );
 
     return { rent, value, cashflow, pendingDocs, annualCosts };
-  }, [portfolio]);
+  }, [activePortfolio]);
 
   const documentTotals = useMemo(() => {
-    const allDocuments = portfolio.flatMap((property) => documentsByProperty[property.id] ?? []);
+    const allDocuments = activePortfolio.flatMap((property) => documentsByProperty[property.id] ?? []);
 
     return {
       ok: allDocuments.filter((document) => document.status === "ok").length,
@@ -394,7 +434,7 @@ export default function Home() {
       review: allDocuments.filter((document) => document.status === "review").length,
       locked: allDocuments.filter((document) => document.status === "locked").length,
     };
-  }, [documentsByProperty, portfolio]);
+  }, [activePortfolio, documentsByProperty]);
 
   const importPreview = useMemo(() => parseImportRows(importText), [importText]);
   const readyImportRows = importPreview.filter((row) => row.name && row.address);
@@ -445,16 +485,17 @@ export default function Home() {
 
         setPortfolio(data.properties);
         setDocumentsByProperty(data.documentsByProperty);
+        const activeProperties = data.properties.filter((property) => property.status !== "Baja");
         setSelectedId((current) =>
-          data.properties.some((property) => property.id === current)
+          activeProperties.some((property) => property.id === current)
             ? current
-            : data.properties[0].id,
+            : activeProperties[0]?.id ?? data.properties[0].id,
         );
         setDocumentForm((current) => ({
           ...current,
-          propertyId: data.properties.some((property) => property.id === current.propertyId)
+          propertyId: activeProperties.some((property) => property.id === current.propertyId)
             ? current.propertyId
-            : data.properties[0].id,
+            : activeProperties[0]?.id ?? data.properties[0].id,
         }));
         setSyncState(data.persisted ? "D1 activo" : "Demo local");
         setActionLog((current) => [data.message, ...current]);
@@ -686,6 +727,91 @@ export default function Home() {
     setIsSaving(false);
   };
 
+  const startEditProperty = (property: Property) => {
+    setSelectedId(property.id);
+    setEditForm(propertyToEditForm(property));
+    setEditMessage(`Editando ${property.name}.`);
+  };
+
+  const cancelEditProperty = () => {
+    setEditForm(emptyEditForm);
+    setEditMessage("Selecciona un inmueble para editarlo.");
+  };
+
+  const savePropertyEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!editForm.id) {
+      setEditMessage("Selecciona primero un inmueble.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "updateProperty", payload: editForm }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "No se pudo guardar el inmueble.");
+      }
+
+      const data = (await response.json()) as PortfolioResponse;
+      const activeProperties = data.properties.filter((property) => property.status !== "Baja");
+
+      setPortfolio(data.properties);
+      setDocumentsByProperty(data.documentsByProperty);
+      setSelectedId(editForm.id);
+      setDocumentForm((current) => ({ ...current, propertyId: editForm.id }));
+      setSyncState("D1 activo");
+      setEditMessage("Cambios guardados en D1.");
+      setActionLog((current) => [`Inmueble ${editForm.id} actualizado.`, ...current]);
+      setEditForm(propertyToEditForm(activeProperties.find((property) => property.id === editForm.id) ?? selected));
+    } catch (error) {
+      setSyncState("Demo sin conexion");
+      setEditMessage(error instanceof Error ? error.message : "No se pudo guardar el inmueble.");
+    }
+
+    setIsSaving(false);
+  };
+
+  const deactivateProperty = async (property: Property) => {
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "deactivateProperty", payload: { id: property.id } }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "No se pudo dar de baja el inmueble.");
+      }
+
+      const data = (await response.json()) as PortfolioResponse;
+      const activeProperties = data.properties.filter((item) => item.status !== "Baja");
+
+      setPortfolio(data.properties);
+      setDocumentsByProperty(data.documentsByProperty);
+      setSelectedId(activeProperties[0]?.id ?? data.properties[0]?.id ?? properties[0].id);
+      setEditForm(emptyEditForm);
+      setSyncState("D1 activo");
+      setEditMessage(`${property.name} dado de baja.`);
+      setActionLog((current) => [`Inmueble ${property.id} dado de baja.`, ...current]);
+    } catch (error) {
+      setSyncState("Demo sin conexion");
+      setEditMessage(error instanceof Error ? error.message : "No se pudo dar de baja.");
+    }
+
+    setIsSaving(false);
+  };
+
   return (
     <main className="min-h-screen bg-[#f7f8f5] text-[#17211c]">
       {!isAuthenticated ? (
@@ -809,7 +935,7 @@ export default function Home() {
           <section className="hero-band" aria-label="Resumen de cartera">
             <div className="hero-copy">
               <p className="eyebrow">Cartera activa</p>
-              <h3>{portfolio.length} activos, trazabilidad documental y rentabilidad en una vista.</h3>
+              <h3>{activePortfolio.length} activos, trazabilidad documental y rentabilidad en una vista.</h3>
               <p>
                 Controla contratos, vencimientos, facturas e incidencias desde un panel
                 preparado para crecer hacia integraciones con Drive, Catastro, INE e Idealista.
@@ -843,7 +969,7 @@ export default function Home() {
               </div>
 
               <div className="document-matrix">
-                {portfolio.map((property) => {
+                {activePortfolio.map((property) => {
                   const documents = documentsByProperty[property.id] ?? [];
                   const pendingCount = documents.filter(
                     (document) => document.status === "pending" || document.status === "review",
@@ -1048,7 +1174,7 @@ export default function Home() {
                   <p className="eyebrow">Operativa</p>
                   <h3>Altas y documentos guardados en la base de datos de la app.</h3>
                 </div>
-                <span>{portfolio.length} inmuebles en cartera</span>
+                <span>{activePortfolio.length} inmuebles en cartera</span>
               </div>
 
               <div className="actions-grid">
@@ -1145,7 +1271,7 @@ export default function Home() {
                         }))
                       }
                     >
-                      {portfolio.map((property) => (
+                      {activePortfolio.map((property) => (
                         <option key={property.id} value={property.id}>
                           {property.name}
                         </option>
@@ -1238,37 +1364,179 @@ export default function Home() {
               </section>
 
               <div className="property-list">
-                {portfolio.map((property) => (
-                  <button
+                {activePortfolio.map((property) => (
+                  <article
                     key={property.id}
                     className={property.id === selected.id ? "property-row selected" : "property-row"}
-                    onClick={() => setSelectedId(property.id)}
                   >
-                    <div className="property-title">
-                      <span className={`risk-dot ${property.risk.toLowerCase()}`} />
-                      <div>
-                        <strong>{property.name}</strong>
-                        <span>{property.address}</span>
+                    <button className="property-main" onClick={() => setSelectedId(property.id)}>
+                      <div className="property-title">
+                        <span className={`risk-dot ${property.risk.toLowerCase()}`} />
+                        <div>
+                          <strong>{property.name}</strong>
+                          <span>{property.address}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="property-stat">
-                      <span>Renta</span>
-                      <strong>{amount(property.rent)}</strong>
-                    </div>
-                    <div className="property-stat">
-                      <span>Neta</span>
-                      <strong>{rate(property.yieldNet)}</strong>
-                    </div>
-                    <div className="property-stat">
-                      <span>Documentos</span>
-                      <strong>{property.documents}%</strong>
-                    </div>
-                    <span className={`status-pill ${property.status === "Disponible" ? "warn" : ""}`}>
-                      {property.status}
-                    </span>
-                  </button>
+                      <div className="property-stat">
+                        <span>Renta</span>
+                        <strong>{amount(property.rent)}</strong>
+                      </div>
+                      <div className="property-stat">
+                        <span>Neta</span>
+                        <strong>{rate(property.yieldNet)}</strong>
+                      </div>
+                      <div className="property-stat">
+                        <span>Documentos</span>
+                        <strong>{property.documents}%</strong>
+                      </div>
+                      <span className={`status-pill ${property.status === "Disponible" ? "warn" : ""}`}>
+                        {property.status}
+                      </span>
+                    </button>
+                    {!hideAmounts && activeView === "Inmuebles" && (
+                      <div className="property-actions">
+                        <button type="button" onClick={() => startEditProperty(property)}>
+                          Editar
+                        </button>
+                        <button type="button" className="danger" onClick={() => deactivateProperty(property)}>
+                          Baja
+                        </button>
+                      </div>
+                    )}
+                  </article>
                 ))}
               </div>
+
+              {!hideAmounts && activeView === "Inmuebles" && (
+                <form className="edit-property-panel" onSubmit={savePropertyEdit}>
+                  <div className="section-head compact">
+                    <div>
+                      <p className="eyebrow">Editar inmueble</p>
+                      <h3>{editForm.id ? editForm.name || editForm.id : "Seleccion pendiente"}</h3>
+                    </div>
+                    <span>{editForm.id || "..."}</span>
+                  </div>
+
+                  <div className="form-pair">
+                    <label>
+                      <span>Nombre</span>
+                      <input
+                        value={editForm.name}
+                        onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+                        placeholder="Nombre del inmueble"
+                      />
+                    </label>
+                    <label>
+                      <span>Direccion</span>
+                      <input
+                        value={editForm.address}
+                        onChange={(event) => setEditForm((current) => ({ ...current, address: event.target.value }))}
+                        placeholder="Direccion"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="form-pair">
+                    <label>
+                      <span>Tipo</span>
+                      <select
+                        value={editForm.type}
+                        onChange={(event) => setEditForm((current) => ({ ...current, type: event.target.value }))}
+                      >
+                        <option>Residencial</option>
+                        <option>Local</option>
+                        <option>Oficina</option>
+                        <option>Garaje</option>
+                        <option>Trastero</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Estado</span>
+                      <select
+                        value={editForm.status}
+                        onChange={(event) => setEditForm((current) => ({ ...current, status: event.target.value }))}
+                      >
+                        <option>Ocupado</option>
+                        <option>Disponible</option>
+                        <option>En revision</option>
+                        <option>En alta</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="form-pair">
+                    <label>
+                      <span>Inquilino</span>
+                      <input
+                        value={editForm.tenant}
+                        onChange={(event) => setEditForm((current) => ({ ...current, tenant: event.target.value }))}
+                        placeholder="Sin inquilino"
+                      />
+                    </label>
+                    <label>
+                      <span>Proxima revision</span>
+                      <input
+                        value={editForm.nextReview}
+                        onChange={(event) => setEditForm((current) => ({ ...current, nextReview: event.target.value }))}
+                        placeholder="2026-09-15"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="form-pair">
+                    <NumberField label="Renta mensual" value={editForm.rent} onChange={(value) => setEditForm((current) => ({ ...current, rent: value }))} />
+                    <NumberField label="Valor estimado" value={editForm.value} onChange={(value) => setEditForm((current) => ({ ...current, value }))} />
+                  </div>
+
+                  <div className="form-pair">
+                    <NumberField label="Seguro vivienda anual" value={editForm.homeInsurance} onChange={(value) => setEditForm((current) => ({ ...current, homeInsurance: value }))} />
+                    <NumberField label="IBI anual" value={editForm.ibi} onChange={(value) => setEditForm((current) => ({ ...current, ibi: value }))} />
+                  </div>
+
+                  <div className="form-pair">
+                    <NumberField label="Basuras anual" value={editForm.wasteTax} onChange={(value) => setEditForm((current) => ({ ...current, wasteTax: value }))} />
+                    <NumberField label="Comunidad anual" value={editForm.community} onChange={(value) => setEditForm((current) => ({ ...current, community: value }))} />
+                  </div>
+
+                  <div className="form-pair">
+                    <NumberField label="Seguro alquiler anual" value={editForm.rentInsurance} onChange={(value) => setEditForm((current) => ({ ...current, rentInsurance: value }))} />
+                    <NumberField label="Financiacion anual" value={editForm.financing} onChange={(value) => setEditForm((current) => ({ ...current, financing: value }))} />
+                  </div>
+
+                  <label className="wide-label">
+                    <span>Carpeta Drive</span>
+                    <input
+                      value={editForm.driveFolder}
+                      onChange={(event) => setEditForm((current) => ({ ...current, driveFolder: event.target.value }))}
+                      placeholder="Drive / Inmuebles / ..."
+                    />
+                  </label>
+
+                  <label className="check-label">
+                    <input
+                      type="checkbox"
+                      checked={editForm.utilitiesAssumedByTenant}
+                      onChange={(event) =>
+                        setEditForm((current) => ({
+                          ...current,
+                          utilitiesAssumedByTenant: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span>Suministros asumidos por inquilino</span>
+                  </label>
+
+                  <div className="edit-actions">
+                    <button type="submit" disabled={isSaving || !editForm.id}>
+                      {isSaving ? "Guardando..." : "Guardar cambios"}
+                    </button>
+                    <button type="button" className="secondary-action" onClick={cancelEditProperty}>
+                      Cancelar
+                    </button>
+                  </div>
+                  <p className="import-note">{editMessage}</p>
+                </form>
+              )}
 
               <section className="finance-panel">
                 <div>
@@ -1444,6 +1712,51 @@ function parseImportRows(text: string): ImportRow[] {
       nextReview: row.proxima_revision || "Pendiente",
     };
   });
+}
+
+function propertyToEditForm(property: Property): PropertyEditForm {
+  return {
+    id: property.id,
+    name: property.name,
+    address: property.address,
+    type: property.type,
+    status: property.status,
+    tenant: property.tenant,
+    rent: property.rent,
+    value: property.value,
+    homeInsurance: property.annualCosts.homeInsurance,
+    ibi: property.annualCosts.ibi,
+    wasteTax: property.annualCosts.wasteTax,
+    community: property.annualCosts.community,
+    rentInsurance: property.annualCosts.rentInsurance,
+    financing: property.annualCosts.financing,
+    utilitiesAssumedByTenant: property.utilitiesAssumedByTenant,
+    driveFolder: property.driveFolder,
+    nextReview: property.nextReview,
+  };
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input
+        type="number"
+        min="0"
+        inputMode="decimal"
+        value={String(value)}
+        onChange={(event) => onChange(Number(event.target.value || 0))}
+      />
+    </label>
+  );
 }
 
 function detectSeparator(line: string) {

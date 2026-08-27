@@ -747,7 +747,8 @@ h3 {
 .settings-panel,
 .action-form,
 .action-log,
-.import-panel {
+.import-panel,
+.edit-property-panel {
   display: grid;
   gap: 14px;
   padding: 18px;
@@ -859,20 +860,24 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.action-form label {
+.action-form label,
+.edit-property-panel label {
   display: grid;
   gap: 7px;
   min-width: 0;
 }
 
-.action-form label > span {
+.action-form label > span,
+.edit-property-panel label > span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
 }
 
 .action-form input,
-.action-form select {
+.action-form select,
+.edit-property-panel input,
+.edit-property-panel select {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line);
@@ -884,7 +889,9 @@ h3 {
 }
 
 .action-form input:focus,
-.action-form select:focus {
+.action-form select:focus,
+.edit-property-panel input:focus,
+.edit-property-panel select:focus {
   border-color: rgba(31, 122, 91, 0.62);
   box-shadow: 0 0 0 3px rgba(31, 122, 91, 0.1);
 }
@@ -905,6 +912,49 @@ h3 {
 }
 
 .action-form button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.edit-property-panel {
+  margin-top: 10px;
+}
+
+.wide-label {
+  grid-column: 1 / -1;
+}
+
+.check-label {
+  display: flex !important;
+  align-items: center;
+  gap: 10px !important;
+  border-radius: 8px;
+  background: #f5f7f3;
+  padding: 10px 12px;
+}
+
+.check-label input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.edit-actions button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ink);
+  color: white;
+  padding: 0 14px;
+  font-weight: 820;
+}
+
+.edit-actions button:disabled {
   cursor: wait;
   opacity: 0.68;
 }
@@ -1101,8 +1151,8 @@ h3 {
 
 .property-row {
   display: grid;
-  grid-template-columns: minmax(230px, 1.5fr) repeat(3, minmax(84px, 0.6fr)) 112px;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
   width: 100%;
   min-height: 78px;
@@ -1113,6 +1163,42 @@ h3 {
   color: var(--ink);
   text-align: left;
   transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.property-main {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.5fr) repeat(3, minmax(84px, 0.6fr)) 112px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+  text-align: left;
+}
+
+.property-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.property-actions button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 840;
+}
+
+.property-actions .danger {
+  border-color: rgba(179, 59, 85, 0.24);
+  background: var(--rose-soft);
+  color: var(--rose);
 }
 
 .property-row:hover,
@@ -1653,8 +1739,22 @@ h3 {
     min-height: auto;
   }
 
+  .property-main {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+  }
+
   .property-title {
     grid-column: 1 / -1;
+  }
+
+  .property-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .property-actions button {
+    flex: 1;
   }
 
   .status-pill {

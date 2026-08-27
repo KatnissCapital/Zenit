@@ -15,6 +15,7 @@ Demo funcional de una aplicacion web responsive/PWA para gestionar una cartera i
   documentales con escritura en D1.
 - Pantalla de importacion de datos reales mediante plantilla CSV descargable,
   previsualizacion y guardado en D1.
+- Edicion y baja logica de inmuebles desde la pantalla de listado.
 - Pantalla de acceso demo para separar la vista publica de expedientes sensibles.
 - Configuracion inicial de roles: administrador, gestor, financiero, auditor e
   invitado con importes ocultos.
