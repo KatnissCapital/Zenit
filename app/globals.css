@@ -1144,6 +1144,10 @@ h3 {
   min-width: 0;
 }
 
+.main-column {
+  overflow-x: clip;
+}
+
 .section-head {
   align-items: center;
   justify-content: space-between;
@@ -1192,6 +1196,7 @@ h3 {
 .property-list {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .property-row {
@@ -1200,6 +1205,8 @@ h3 {
   gap: 10px;
   align-items: center;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 78px;
   padding: 12px;
   border: 1px solid var(--line);
@@ -1212,10 +1219,12 @@ h3 {
 
 .property-main {
   display: grid;
-  grid-template-columns: minmax(230px, 1.5fr) repeat(3, minmax(84px, 0.6fr)) 112px;
+  grid-template-columns: minmax(180px, 1.5fr) repeat(3, minmax(76px, 0.6fr)) minmax(92px, auto);
   gap: 12px;
   align-items: center;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -1263,6 +1272,12 @@ h3 {
   min-width: 0;
   align-items: center;
   gap: 12px;
+}
+
+.property-title > div,
+.property-stat,
+.status-pill {
+  min-width: 0;
 }
 
 .property-title strong,
