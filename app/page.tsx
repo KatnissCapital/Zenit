@@ -450,6 +450,12 @@ export default function Home() {
     (sum, value) => sum + value,
     0,
   );
+  const editBaseline = editForm.id
+    ? activePortfolio.find((property) => property.id === editForm.id)
+    : null;
+  const hasUnsavedChanges = editBaseline
+    ? JSON.stringify(editForm) !== JSON.stringify(propertyToEditForm(editBaseline))
+    : false;
 
   const totals = useMemo(() => {
     const rent = activePortfolio.reduce((sum, property) => sum + property.rent, 0);
@@ -514,9 +520,8 @@ export default function Home() {
       row.financing,
     0,
   );
-  const amount = (value: number) => (hideAmounts ? "Importe oculto" : euro.format(value));
-  const rate = (value: number) => (hideAmounts ? "Importe oculto" : `${value}%`);
-  const trend = (value: string) => (hideAmounts && /[0-9]|EUR|€/.test(value) ? "Oculto" : value);
+  const amount = (value: number) => euro.format(value);
+  const rate = (value: number) => `${value}%`;
 
   const changeRole = (role: UserRole) => {
     setActiveRole(role);
@@ -1024,7 +1029,7 @@ export default function Home() {
         </section>
       ) : (
       <>
-      <div className="app-shell">
+      <div className={hideAmounts ? "app-shell guest-mode" : "app-shell"}>
         <aside className="sidebar" aria-label="Navegacion principal">
           <div className="brand-block">
             <div className="brand-mark">K</div>
@@ -1095,6 +1100,7 @@ export default function Home() {
             </div>
           </header>
 
+          {activeView === "Dashboard" && (
           <section className="hero-band" aria-label="Resumen de cartera">
             <div className="hero-copy">
               <p className="eyebrow">Cartera activa</p>
@@ -1107,6 +1113,7 @@ export default function Home() {
               <Metric label="Equity total" value={amount(totals.equity)} trend={`LTV ${rate(totals.ltv)}`} />
             </div>
           </section>
+          )}
 
           {activeView === "Documentos" && (
             <section className="document-index" aria-label="Indice documental">
@@ -1518,7 +1525,39 @@ export default function Home() {
             </section>
           )}
 
-          {activeView !== "Configuracion" && activeView !== "Importacion" && activeView !== "Acciones" && (
+          {activeView === "Finanzas" && (
+            <section className="finance-panel finance-only">
+              <div>
+                <p className="eyebrow">Finanzas</p>
+                <h3>Lectura financiera</h3>
+              </div>
+              <div className="finance-grid">
+                <FinanceItem label="Valor cartera" value={amount(totals.value)} detail={`${activePortfolio.length} activos`} />
+                <FinanceItem label="Deuda total" value={amount(totals.debt)} detail={`LTV ${rate(totals.ltv)}`} />
+                <FinanceItem label="Equity total" value={amount(totals.equity)} detail="Valor menos deuda" />
+                <FinanceItem label="Cash flow anual" value={amount(totals.cashflowAnnual)} detail="Rentas menos gastos y deuda" />
+                <FinanceItem label="ROE cartera" value={rate(totals.roe)} detail="Cash flow / equity" />
+                <FinanceItem label="LTV cartera" value={rate(totals.ltv)} detail="Deuda / valor" />
+              </div>
+              <div className="finance-property-grid">
+                {activePortfolio.map((property) => (
+                  <article key={property.id}>
+                    <div>
+                      <span>{property.id}</span>
+                      <strong>{property.name}</strong>
+                    </div>
+                    <FinanceItem label="Valor" value={amount(property.value)} detail="Actual estimado" />
+                    <FinanceItem label="Deuda" value={amount(property.debtBalance)} detail={`LTV ${rate(property.ltv)}`} />
+                    <FinanceItem label="Equity" value={amount(property.equity)} detail="Capital propio" />
+                    <FinanceItem label="Cash flow anual" value={amount(property.cashflowAnnual)} detail="Despues de gastos" />
+                    <FinanceItem label="ROE" value={rate(property.roe)} detail="Sobre equity" />
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {(activeView === "Dashboard" || activeView === "Inmuebles") && (
           <section className={activeView === "Inmuebles" ? "content-grid property-management-grid" : "content-grid"}>
             <div className="main-column">
               <section className="section-head">
@@ -1549,11 +1588,11 @@ export default function Home() {
                       </div>
                       <div className="property-stat">
                         <span>Renta</span>
-                        <strong>{amount(property.rent)}</strong>
+                        <strong className="sensitive-value">{amount(property.rent)}</strong>
                       </div>
                       <div className="property-stat">
                         <span>Neta</span>
-                        <strong>{rate(property.yieldNet)}</strong>
+                        <strong className="sensitive-value">{rate(property.yieldNet)}</strong>
                       </div>
                       <div className="property-stat">
                         <span>Documentos</span>
@@ -1563,10 +1602,10 @@ export default function Home() {
                         {property.status}
                       </span>
                     </button>
-                    {!hideAmounts && activeView === "Inmuebles" && (
+                    {!hideAmounts && activeView === "Inmuebles" && property.id === selected.id && (
                       <div className="property-actions">
                         <button type="button" onClick={() => startEditProperty(property)}>
-                          Editar
+                          Editar ficha
                         </button>
                         <button type="button" className="danger" onClick={() => deactivateProperty(property)}>
                           Baja
@@ -1576,157 +1615,195 @@ export default function Home() {
                         </button>
                       </div>
                     )}
+                    {activeView === "Inmuebles" && property.id === selected.id && (
+                      editForm.id === property.id ? (
+                        <form className="edit-property-panel inline-edit-panel" onSubmit={savePropertyEdit}>
+                          <div className="section-head compact">
+                            <div>
+                              <p className="eyebrow">Modo edicion</p>
+                              <h3>Editando: {property.id} · {property.name}</h3>
+                            </div>
+                            <span>{hasUnsavedChanges ? "!" : property.id}</span>
+                          </div>
+
+                          {hasUnsavedChanges && (
+                            <p className="edit-state">Cambios sin guardar</p>
+                          )}
+
+                          <div className="form-pair">
+                            <label>
+                              <span>Nombre</span>
+                              <input
+                                value={editForm.name}
+                                onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+                                placeholder="Nombre del inmueble"
+                              />
+                            </label>
+                            <label>
+                              <span>Direccion</span>
+                              <input
+                                value={editForm.address}
+                                onChange={(event) => setEditForm((current) => ({ ...current, address: event.target.value }))}
+                                placeholder="Direccion"
+                              />
+                            </label>
+                          </div>
+
+                          <div className="form-pair">
+                            <label>
+                              <span>Tipo</span>
+                              <select
+                                value={editForm.type}
+                                onChange={(event) => setEditForm((current) => ({ ...current, type: event.target.value }))}
+                              >
+                                <option>Residencial</option>
+                                <option>Local</option>
+                                <option>Oficina</option>
+                                <option>Garaje</option>
+                                <option>Trastero</option>
+                              </select>
+                            </label>
+                            <label>
+                              <span>Estado</span>
+                              <select
+                                value={editForm.status}
+                                onChange={(event) => setEditForm((current) => ({ ...current, status: event.target.value }))}
+                              >
+                                <option>Ocupado</option>
+                                <option>Disponible</option>
+                                <option>En revision</option>
+                                <option>En alta</option>
+                              </select>
+                            </label>
+                          </div>
+
+                          <div className="form-pair">
+                            <label>
+                              <span>Inquilino</span>
+                              <input
+                                value={editForm.tenant}
+                                onChange={(event) => setEditForm((current) => ({ ...current, tenant: event.target.value }))}
+                                placeholder="Sin inquilino"
+                              />
+                            </label>
+                            <label>
+                              <span>Proxima revision</span>
+                              <input
+                                value={editForm.nextReview}
+                                onChange={(event) => setEditForm((current) => ({ ...current, nextReview: event.target.value }))}
+                                placeholder="2026-09-15"
+                              />
+                            </label>
+                          </div>
+
+                          <div className="form-pair">
+                            <NumberField label="Renta mensual" value={editForm.rent} onChange={(value) => setEditForm((current) => ({ ...current, rent: value }))} />
+                            <NumberField label="Valor estimado" value={editForm.value} onChange={(value) => setEditForm((current) => ({ ...current, value }))} />
+                          </div>
+
+                          <div className="form-pair">
+                            <NumberField label="Deuda pendiente" value={editForm.debtBalance} onChange={(value) => setEditForm((current) => ({ ...current, debtBalance: value }))} />
+                            <NumberField label="Cuota hipotecaria anual" value={editForm.financing} onChange={(value) => setEditForm((current) => ({ ...current, financing: value }))} />
+                          </div>
+
+                          <div className="form-pair">
+                            <NumberField label="Seguro vivienda anual" value={editForm.homeInsurance} onChange={(value) => setEditForm((current) => ({ ...current, homeInsurance: value }))} />
+                            <NumberField label="IBI anual" value={editForm.ibi} onChange={(value) => setEditForm((current) => ({ ...current, ibi: value }))} />
+                          </div>
+
+                          <label className="wide-label">
+                            <span>Aseguradora hogar</span>
+                            <input
+                              value={editForm.homeInsuranceCompany}
+                              onChange={(event) =>
+                                setEditForm((current) => ({ ...current, homeInsuranceCompany: event.target.value }))
+                              }
+                              placeholder="Mapfre, Mutua, Allianz..."
+                            />
+                          </label>
+
+                          <div className="form-pair">
+                            <NumberField label="Basuras anual" value={editForm.wasteTax} onChange={(value) => setEditForm((current) => ({ ...current, wasteTax: value }))} />
+                            <NumberField label="Comunidad anual" value={editForm.community} onChange={(value) => setEditForm((current) => ({ ...current, community: value }))} />
+                          </div>
+
+                          <div className="form-pair">
+                            <NumberField label="Seguro alquiler anual" value={editForm.rentInsurance} onChange={(value) => setEditForm((current) => ({ ...current, rentInsurance: value }))} />
+                            <NumberField label="Reparaciones/mantenimiento" value={editForm.maintenance} onChange={(value) => setEditForm((current) => ({ ...current, maintenance: value }))} />
+                          </div>
+
+                          <label className="wide-label">
+                            <span>Carpeta Drive</span>
+                            <input
+                              value={editForm.driveFolder}
+                              onChange={(event) => setEditForm((current) => ({ ...current, driveFolder: event.target.value }))}
+                              placeholder="Drive / Inmuebles / ..."
+                            />
+                          </label>
+
+                          <label className="check-label">
+                            <input
+                              type="checkbox"
+                              checked={editForm.utilitiesAssumedByTenant}
+                              onChange={(event) =>
+                                setEditForm((current) => ({
+                                  ...current,
+                                  utilitiesAssumedByTenant: event.target.checked,
+                                }))
+                              }
+                            />
+                            <span>Suministros asumidos por inquilino</span>
+                          </label>
+
+                          <div className="edit-actions">
+                            <button type="submit" disabled={isSaving || !editForm.id}>
+                              {isSaving ? "Guardando..." : "Guardar cambios"}
+                            </button>
+                            <button type="button" className="secondary-action" onClick={cancelEditProperty}>
+                              Cancelar
+                            </button>
+                          </div>
+                          <p className="import-note">{editMessage}</p>
+                        </form>
+                      ) : (
+                        <section className="selected-property-panel" aria-label={`Ficha de ${property.name}`}>
+                          <div className="section-head compact">
+                            <div>
+                              <p className="eyebrow">Modo consulta</p>
+                              <h3>{property.id} · {property.name}</h3>
+                            </div>
+                            {!hideAmounts && (
+                              <button type="button" onClick={() => startEditProperty(property)}>
+                                Editar ficha
+                              </button>
+                            )}
+                          </div>
+                          <div className="detail-stats">
+                            <Detail label="Direccion" value={property.address} />
+                            <Detail label="Inquilino" value={property.tenant} />
+                            <Detail label="Estado" value={property.status} />
+                            <Detail label="Aseguradora hogar" value={property.homeInsuranceCompany} />
+                            <Detail label="Revision" value={property.nextReview} />
+                            <Detail label="Cash flow anual" value={amount(property.cashflowAnnual)} />
+                          </div>
+                          <section className="cost-panel" aria-label="Costes del inmueble seleccionado">
+                            <div className="cost-total">
+                              <span>Costes anuales controlados</span>
+                              <strong className="sensitive-value">{amount(Object.values(property.annualCosts).reduce((sum, value) => sum + value, 0))}</strong>
+                            </div>
+                            <div className="cost-total compact-cost">
+                              <span>Restas mensuales</span>
+                              <strong className="sensitive-value">{amount(Math.round(Object.values(property.annualCosts).reduce((sum, value) => sum + value, 0) / 12))}</strong>
+                            </div>
+                          </section>
+                        </section>
+                      )
+                    )}
                   </article>
                 ))}
               </div>
 
-              {!hideAmounts && activeView === "Inmuebles" && (
-                <form className="edit-property-panel" onSubmit={savePropertyEdit}>
-                  <div className="section-head compact">
-                    <div>
-                      <p className="eyebrow">Editar inmueble</p>
-                      <h3>{editForm.id ? editForm.name || editForm.id : "Seleccion pendiente"}</h3>
-                    </div>
-                    <span>{editForm.id || "..."}</span>
-                  </div>
-
-                  <div className="form-pair">
-                    <label>
-                      <span>Nombre</span>
-                      <input
-                        value={editForm.name}
-                        onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
-                        placeholder="Nombre del inmueble"
-                      />
-                    </label>
-                    <label>
-                      <span>Direccion</span>
-                      <input
-                        value={editForm.address}
-                        onChange={(event) => setEditForm((current) => ({ ...current, address: event.target.value }))}
-                        placeholder="Direccion"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="form-pair">
-                    <label>
-                      <span>Tipo</span>
-                      <select
-                        value={editForm.type}
-                        onChange={(event) => setEditForm((current) => ({ ...current, type: event.target.value }))}
-                      >
-                        <option>Residencial</option>
-                        <option>Local</option>
-                        <option>Oficina</option>
-                        <option>Garaje</option>
-                        <option>Trastero</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Estado</span>
-                      <select
-                        value={editForm.status}
-                        onChange={(event) => setEditForm((current) => ({ ...current, status: event.target.value }))}
-                      >
-                        <option>Ocupado</option>
-                        <option>Disponible</option>
-                        <option>En revision</option>
-                        <option>En alta</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="form-pair">
-                    <label>
-                      <span>Inquilino</span>
-                      <input
-                        value={editForm.tenant}
-                        onChange={(event) => setEditForm((current) => ({ ...current, tenant: event.target.value }))}
-                        placeholder="Sin inquilino"
-                      />
-                    </label>
-                    <label>
-                      <span>Proxima revision</span>
-                      <input
-                        value={editForm.nextReview}
-                        onChange={(event) => setEditForm((current) => ({ ...current, nextReview: event.target.value }))}
-                        placeholder="2026-09-15"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="form-pair">
-                    <NumberField label="Renta mensual" value={editForm.rent} onChange={(value) => setEditForm((current) => ({ ...current, rent: value }))} />
-                    <NumberField label="Valor estimado" value={editForm.value} onChange={(value) => setEditForm((current) => ({ ...current, value }))} />
-                  </div>
-
-                  <div className="form-pair">
-                    <NumberField label="Deuda pendiente" value={editForm.debtBalance} onChange={(value) => setEditForm((current) => ({ ...current, debtBalance: value }))} />
-                    <NumberField label="Cuota hipotecaria anual" value={editForm.financing} onChange={(value) => setEditForm((current) => ({ ...current, financing: value }))} />
-                  </div>
-
-                  <div className="form-pair">
-                    <NumberField label="Seguro vivienda anual" value={editForm.homeInsurance} onChange={(value) => setEditForm((current) => ({ ...current, homeInsurance: value }))} />
-                    <NumberField label="IBI anual" value={editForm.ibi} onChange={(value) => setEditForm((current) => ({ ...current, ibi: value }))} />
-                  </div>
-
-                  <label className="wide-label">
-                    <span>Aseguradora hogar</span>
-                    <input
-                      value={editForm.homeInsuranceCompany}
-                      onChange={(event) =>
-                        setEditForm((current) => ({ ...current, homeInsuranceCompany: event.target.value }))
-                      }
-                      placeholder="Mapfre, Mutua, Allianz..."
-                    />
-                  </label>
-
-                  <div className="form-pair">
-                    <NumberField label="Basuras anual" value={editForm.wasteTax} onChange={(value) => setEditForm((current) => ({ ...current, wasteTax: value }))} />
-                    <NumberField label="Comunidad anual" value={editForm.community} onChange={(value) => setEditForm((current) => ({ ...current, community: value }))} />
-                  </div>
-
-                  <div className="form-pair">
-                    <NumberField label="Seguro alquiler anual" value={editForm.rentInsurance} onChange={(value) => setEditForm((current) => ({ ...current, rentInsurance: value }))} />
-                    <NumberField label="Reparaciones/mantenimiento" value={editForm.maintenance} onChange={(value) => setEditForm((current) => ({ ...current, maintenance: value }))} />
-                  </div>
-
-                  <label className="wide-label">
-                    <span>Carpeta Drive</span>
-                    <input
-                      value={editForm.driveFolder}
-                      onChange={(event) => setEditForm((current) => ({ ...current, driveFolder: event.target.value }))}
-                      placeholder="Drive / Inmuebles / ..."
-                    />
-                  </label>
-
-                  <label className="check-label">
-                    <input
-                      type="checkbox"
-                      checked={editForm.utilitiesAssumedByTenant}
-                      onChange={(event) =>
-                        setEditForm((current) => ({
-                          ...current,
-                          utilitiesAssumedByTenant: event.target.checked,
-                        }))
-                      }
-                    />
-                    <span>Suministros asumidos por inquilino</span>
-                  </label>
-
-                  <div className="edit-actions">
-                    <button type="submit" disabled={isSaving || !editForm.id}>
-                      {isSaving ? "Guardando..." : "Guardar cambios"}
-                    </button>
-                    <button type="button" className="secondary-action" onClick={cancelEditProperty}>
-                      Cancelar
-                    </button>
-                  </div>
-                  <p className="import-note">{editMessage}</p>
-                </form>
-              )}
-
+              {activeView === "Dashboard" && (
               <section className="finance-panel">
                 <div>
                   <p className="eyebrow">Finanzas</p>
@@ -1756,8 +1833,10 @@ export default function Home() {
                   ))}
                 </div>
               </section>
+              )}
             </div>
 
+            {activeView === "Dashboard" && (
             <aside className="insight-column">
               <section className="detail-card">
                 <div className="detail-top">
@@ -1785,11 +1864,11 @@ export default function Home() {
                 <section className="cost-panel" aria-label="Costes reales del inmueble">
                   <div className="cost-total">
                     <span>Costes anuales controlados</span>
-                    <strong>{amount(selectedAnnualCosts)}</strong>
+                    <strong className="sensitive-value">{amount(selectedAnnualCosts)}</strong>
                   </div>
                   <div className="cost-total compact-cost">
                     <span>Restas mensuales</span>
-                    <strong>{amount(Math.round(selectedAnnualCosts / 12))}</strong>
+                    <strong className="sensitive-value">{amount(Math.round(selectedAnnualCosts / 12))}</strong>
                   </div>
                   <Cost label="Seguro vivienda" value={selected.annualCosts.homeInsurance} hideAmounts={hideAmounts} />
                   <Cost label="IBI" value={selected.annualCosts.ibi} hideAmounts={hideAmounts} />
@@ -1862,6 +1941,7 @@ export default function Home() {
                 ))}
               </section>
             </aside>
+            )}
           </section>
           )}
         </section>
@@ -2033,7 +2113,7 @@ function Metric({ label, value, trend }: { label: string; value: string; trend: 
   return (
     <article className="metric-card">
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong className={isSensitiveDisplay(label, value) ? "sensitive-value" : undefined}>{value}</strong>
       <small>{trend}</small>
     </article>
   );
@@ -2043,7 +2123,7 @@ function FinanceItem({ label, value, detail }: { label: string; value: string; d
   return (
     <div className="finance-item">
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong className={isSensitiveDisplay(label, value) ? "sensitive-value" : undefined}>{value}</strong>
       <small>{detail}</small>
     </div>
   );
@@ -2053,7 +2133,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong className={isSensitiveDisplay(label, value) ? "sensitive-value" : undefined}>{value}</strong>
     </div>
   );
 }
@@ -2070,9 +2150,19 @@ function Cost({
   return (
     <div className="cost-row">
       <span>{label}</span>
-      <strong>{hideAmounts ? "Importe oculto" : value > 0 ? euro.format(value) : "No consta"}</strong>
+      <strong className={hideAmounts ? "sensitive-value" : undefined}>
+        {value > 0 ? euro.format(value) : "No consta"}
+      </strong>
     </div>
   );
+}
+
+function isSensitiveDisplay(label: string, value: string) {
+  if (/document/i.test(label)) {
+    return false;
+  }
+
+  return /€|%/.test(value);
 }
 
 function DocSummary({
