@@ -17,6 +17,11 @@ type Property = {
   nextReview: string;
   risk: "Bajo" | "Medio" | "Alto";
   value: number;
+  debtBalance: number;
+  equity: number;
+  roe: number;
+  ltv: number;
+  cashflowAnnual: number;
   annualCosts: {
     homeInsurance: number;
     ibi: number;
@@ -24,6 +29,7 @@ type Property = {
     community: number;
     rentInsurance: number;
     financing: number;
+    maintenance: number;
   };
   utilitiesAssumedByTenant: boolean;
   driveFolder: string;
@@ -67,6 +73,8 @@ type ImportRow = {
   community: number;
   rentInsurance: number;
   financing: number;
+  maintenance: number;
+  debtBalance: number;
   utilitiesAssumedByTenant: boolean;
   driveFolder: string;
   nextReview: string;
@@ -122,6 +130,11 @@ const properties: Property[] = [
     nextReview: "15 sep",
     risk: "Bajo",
     value: 428000,
+    debtBalance: 248000,
+    equity: 180000,
+    roe: 4.6,
+    ltv: 57.9,
+    cashflowAnnual: 8280,
     annualCosts: {
       homeInsurance: 410,
       ibi: 780,
@@ -129,6 +142,7 @@ const properties: Property[] = [
       community: 1560,
       rentInsurance: 285,
       financing: 7440,
+      maintenance: 900,
     },
     utilitiesAssumedByTenant: true,
     driveFolder: "Drive / MAD-014 Piso Salamanca",
@@ -149,6 +163,11 @@ const properties: Property[] = [
     nextReview: "02 oct",
     risk: "Medio",
     value: 286000,
+    debtBalance: 154000,
+    equity: 132000,
+    roe: 5.3,
+    ltv: 53.8,
+    cashflowAnnual: 7004,
     annualCosts: {
       homeInsurance: 355,
       ibi: 520,
@@ -156,6 +175,7 @@ const properties: Property[] = [
       community: 1040,
       rentInsurance: 0,
       financing: 4320,
+      maintenance: 1020,
     },
     utilitiesAssumedByTenant: false,
     driveFolder: "Drive / VAL-003 Atico Ruzafa",
@@ -176,6 +196,11 @@ const properties: Property[] = [
     nextReview: "28 ago",
     risk: "Medio",
     value: 512000,
+    debtBalance: 310000,
+    equity: 202000,
+    roe: 3.8,
+    ltv: 60.5,
+    cashflowAnnual: 7650,
     annualCosts: {
       homeInsurance: 690,
       ibi: 1380,
@@ -183,6 +208,7 @@ const properties: Property[] = [
       community: 2220,
       rentInsurance: 0,
       financing: 11880,
+      maintenance: 2160,
     },
     utilitiesAssumedByTenant: true,
     driveFolder: "Drive / BCN-021 Local Gracia",
@@ -203,6 +229,11 @@ const properties: Property[] = [
     nextReview: "Vacante",
     risk: "Alto",
     value: 238000,
+    debtBalance: 118000,
+    equity: 120000,
+    roe: 1.5,
+    ltv: 49.6,
+    cashflowAnnual: 1756,
     annualCosts: {
       homeInsurance: 330,
       ibi: 460,
@@ -210,6 +241,7 @@ const properties: Property[] = [
       community: 890,
       rentInsurance: 210,
       financing: 3960,
+      maintenance: 760,
     },
     utilitiesAssumedByTenant: false,
     driveFolder: "Drive / SEV-009 Apartamento Triana",
@@ -236,13 +268,6 @@ const alerts = [
     tone: "blue",
     due: "Revision",
   },
-];
-
-const financialRows = [
-  ["Ingresos mensuales", "6.245 EUR", "+4,2%"],
-  ["NOI estimado", "4.190 EUR", "+2,8%"],
-  ["Cash flow neto", "2.065 EUR", "+310 EUR"],
-  ["Vacancia prevista", "5,5%", "-1,1 pp"],
 ];
 
 const driveRootUrl =
@@ -348,12 +373,14 @@ const emptyEditForm: PropertyEditForm = {
   tenant: "Sin inquilino",
   rent: 0,
   value: 0,
+  debtBalance: 0,
   homeInsurance: 0,
   ibi: 0,
   wasteTax: 0,
   community: 0,
   rentInsurance: 0,
   financing: 0,
+  maintenance: 0,
   utilitiesAssumedByTenant: false,
   driveFolder: "",
   nextReview: "Pendiente",
@@ -420,15 +447,20 @@ export default function Home() {
   const totals = useMemo(() => {
     const rent = activePortfolio.reduce((sum, property) => sum + property.rent, 0);
     const value = activePortfolio.reduce((sum, property) => sum + property.value, 0);
-    const cashflow = activePortfolio.reduce((sum, property) => sum + property.cashflow, 0);
+    const debt = activePortfolio.reduce((sum, property) => sum + property.debtBalance, 0);
+    const equity = Math.max(0, value - debt);
+    const cashflowAnnual = activePortfolio.reduce((sum, property) => sum + property.cashflowAnnual, 0);
+    const cashflow = Math.round(cashflowAnnual / 12);
     const pendingDocs = activePortfolio.reduce((sum, property) => sum + property.pendingDocs, 0);
     const annualCosts = activePortfolio.reduce(
       (sum, property) =>
         sum + Object.values(property.annualCosts).reduce((costs, value) => costs + value, 0),
       0,
     );
+    const roe = equity > 0 ? Number(((cashflowAnnual / equity) * 100).toFixed(1)) : 0;
+    const ltv = value > 0 ? Number(((debt / value) * 100).toFixed(1)) : 0;
 
-    return { rent, value, cashflow, pendingDocs, annualCosts };
+    return { rent, value, debt, equity, cashflow, cashflowAnnual, pendingDocs, annualCosts, roe, ltv };
   }, [activePortfolio]);
 
   const documentTotals = useMemo(() => {
@@ -572,11 +604,16 @@ export default function Home() {
       rent,
       yieldNet: value > 0 ? Number((((rent * 12) / value) * 100).toFixed(1)) : 0,
       cashflow: Math.max(0, Math.round(rent * 0.42)),
+      cashflowAnnual: Math.round(rent * 12),
       documents: 12,
       pendingDocs: 7,
       nextReview: "Pendiente",
       risk: "Medio",
       value,
+      debtBalance: 0,
+      equity: value,
+      roe: value > 0 ? Number(((rent * 12 / value) * 100).toFixed(1)) : 0,
+      ltv: 0,
       annualCosts: {
         homeInsurance: 0,
         ibi: 0,
@@ -584,6 +621,7 @@ export default function Home() {
         community: 0,
         rentInsurance: 0,
         financing: 0,
+        maintenance: 0,
       },
       utilitiesAssumedByTenant: false,
       driveFolder: propertyForm.driveFolder || `Drive / ${id}`,
@@ -1042,8 +1080,8 @@ export default function Home() {
             <div className="hero-metrics">
               <Metric label="Valor cartera" value={amount(totals.value)} trend={trend("+3,1%")} />
               <Metric label="Renta mensual" value={amount(totals.rent)} trend={trend("+4,2%")} />
-              <Metric label="Cash flow" value={amount(totals.cashflow)} trend={trend("+310 EUR")} />
-              <Metric label="Costes anuales" value={amount(totals.annualCosts)} trend="Incluye deuda" />
+              <Metric label="Cash flow anual" value={amount(totals.cashflowAnnual)} trend={rate(totals.roe)} />
+              <Metric label="Equity total" value={amount(totals.equity)} trend={`LTV ${rate(totals.ltv)}`} />
             </div>
           </section>
 
@@ -1601,6 +1639,11 @@ export default function Home() {
                   </div>
 
                   <div className="form-pair">
+                    <NumberField label="Deuda pendiente" value={editForm.debtBalance} onChange={(value) => setEditForm((current) => ({ ...current, debtBalance: value }))} />
+                    <NumberField label="Cuota hipotecaria anual" value={editForm.financing} onChange={(value) => setEditForm((current) => ({ ...current, financing: value }))} />
+                  </div>
+
+                  <div className="form-pair">
                     <NumberField label="Seguro vivienda anual" value={editForm.homeInsurance} onChange={(value) => setEditForm((current) => ({ ...current, homeInsurance: value }))} />
                     <NumberField label="IBI anual" value={editForm.ibi} onChange={(value) => setEditForm((current) => ({ ...current, ibi: value }))} />
                   </div>
@@ -1612,7 +1655,7 @@ export default function Home() {
 
                   <div className="form-pair">
                     <NumberField label="Seguro alquiler anual" value={editForm.rentInsurance} onChange={(value) => setEditForm((current) => ({ ...current, rentInsurance: value }))} />
-                    <NumberField label="Financiacion anual" value={editForm.financing} onChange={(value) => setEditForm((current) => ({ ...current, financing: value }))} />
+                    <NumberField label="Reparaciones/mantenimiento" value={editForm.maintenance} onChange={(value) => setEditForm((current) => ({ ...current, maintenance: value }))} />
                   </div>
 
                   <label className="wide-label">
@@ -1653,15 +1696,29 @@ export default function Home() {
               <section className="finance-panel">
                 <div>
                   <p className="eyebrow">Finanzas</p>
-                  <h3>Presupuesto vs real</h3>
+                  <h3>Lectura financiera</h3>
                 </div>
                 <div className="finance-grid">
-                  {financialRows.map(([label, value, trend]) => (
-                    <div key={label} className="finance-item">
-                      <span>{label}</span>
-                      <strong>{hideAmounts ? "Importe oculto" : value}</strong>
-                      <small>{hideAmounts ? "Oculto" : trend}</small>
-                    </div>
+                  <FinanceItem label="Valor cartera" value={amount(totals.value)} detail={`${activePortfolio.length} activos`} />
+                  <FinanceItem label="Deuda total" value={amount(totals.debt)} detail={`LTV ${rate(totals.ltv)}`} />
+                  <FinanceItem label="Equity total" value={amount(totals.equity)} detail="Valor menos deuda" />
+                  <FinanceItem label="Cash flow anual" value={amount(totals.cashflowAnnual)} detail="Rentas menos gastos y deuda" />
+                  <FinanceItem label="ROE cartera" value={rate(totals.roe)} detail="Cash flow / equity" />
+                  <FinanceItem label="LTV cartera" value={rate(totals.ltv)} detail="Deuda / valor" />
+                </div>
+                <div className="finance-property-grid">
+                  {activePortfolio.map((property) => (
+                    <article key={property.id}>
+                      <div>
+                        <span>{property.id}</span>
+                        <strong>{property.name}</strong>
+                      </div>
+                      <FinanceItem label="Valor" value={amount(property.value)} detail="Actual estimado" />
+                      <FinanceItem label="Deuda" value={amount(property.debtBalance)} detail={`LTV ${rate(property.ltv)}`} />
+                      <FinanceItem label="Equity" value={amount(property.equity)} detail="Capital propio" />
+                      <FinanceItem label="Cash flow anual" value={amount(property.cashflowAnnual)} detail="Despues de gastos" />
+                      <FinanceItem label="ROE" value={rate(property.roe)} detail="Sobre equity" />
+                    </article>
                   ))}
                 </div>
               </section>
@@ -1687,7 +1744,7 @@ export default function Home() {
                   <Detail label="Inquilino" value={selected.tenant} />
                   <Detail label="Revision" value={selected.nextReview} />
                   <Detail label="Riesgo" value={selected.risk} />
-                  <Detail label="Cash flow" value={amount(selected.cashflow)} />
+                  <Detail label="Cash flow anual" value={amount(selected.cashflowAnnual)} />
                 </div>
 
                 <section className="cost-panel" aria-label="Costes reales del inmueble">
@@ -1700,7 +1757,8 @@ export default function Home() {
                   <Cost label="Basuras" value={selected.annualCosts.wasteTax} hideAmounts={hideAmounts} />
                   <Cost label="Comunidad" value={selected.annualCosts.community} hideAmounts={hideAmounts} />
                   <Cost label="Seguro alquiler" value={selected.annualCosts.rentInsurance} hideAmounts={hideAmounts} />
-                  <Cost label="Financiacion" value={selected.annualCosts.financing} hideAmounts={hideAmounts} />
+                  <Cost label="Mantenimiento" value={selected.annualCosts.maintenance} hideAmounts={hideAmounts} />
+                  <Cost label="Cuota hipotecaria" value={selected.annualCosts.financing} hideAmounts={hideAmounts} />
                   <div className={selected.utilitiesAssumedByTenant ? "utility-ok" : "utility-risk"}>
                     <span>Suministros</span>
                     <strong>
@@ -1819,6 +1877,8 @@ function parseImportRows(text: string): ImportRow[] {
       community: parseEuro(row.comunidad),
       rentInsurance: parseEuro(row.seguro_alquiler),
       financing: parseEuro(row.financiacion),
+      maintenance: 0,
+      debtBalance: 0,
       utilitiesAssumedByTenant: parseYes(row.suministros_inquilino),
       driveFolder: row.carpeta_drive || "",
       nextReview: row.proxima_revision || "Pendiente",
@@ -1836,12 +1896,14 @@ function propertyToEditForm(property: Property): PropertyEditForm {
     tenant: property.tenant,
     rent: property.rent,
     value: property.value,
+    debtBalance: property.debtBalance,
     homeInsurance: property.annualCosts.homeInsurance,
     ibi: property.annualCosts.ibi,
     wasteTax: property.annualCosts.wasteTax,
     community: property.annualCosts.community,
     rentInsurance: property.annualCosts.rentInsurance,
     financing: property.annualCosts.financing,
+    maintenance: property.annualCosts.maintenance,
     utilitiesAssumedByTenant: property.utilitiesAssumedByTenant,
     driveFolder: property.driveFolder,
     nextReview: property.nextReview,
@@ -1933,6 +1995,16 @@ function Metric({ label, value, trend }: { label: string; value: string; trend: 
       <strong>{value}</strong>
       <small>{trend}</small>
     </article>
+  );
+}
+
+function FinanceItem({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="finance-item">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </div>
   );
 }
 

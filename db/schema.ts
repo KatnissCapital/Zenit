@@ -52,6 +52,8 @@ export const schemaStatements = [
   community_cents INTEGER NOT NULL DEFAULT 0,
   rent_insurance_cents INTEGER NOT NULL DEFAULT 0,
   financing_cents INTEGER NOT NULL DEFAULT 0,
+  maintenance_cents INTEGER NOT NULL DEFAULT 0,
+  debt_balance_cents INTEGER NOT NULL DEFAULT 0,
   utilities_assumed_by_tenant INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );`,

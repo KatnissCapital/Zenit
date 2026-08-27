@@ -9,7 +9,10 @@ Demo funcional de una aplicacion web responsive/PWA para gestionar una cartera i
 - Ficha lateral del inmueble seleccionado.
 - KPIs de renta, valor, cash flow y documentacion.
 - Control economico por inmueble: seguro de vivienda, IBI, basuras, comunidad,
-  seguro de alquiler, financiacion y suministros asumidos por inquilino.
+  seguro de alquiler, cuota hipotecaria, mantenimiento, deuda pendiente,
+  equity, ROE, LTV y suministros asumidos por inquilino.
+- Vista financiera real para cartera e inmuebles: valor, deuda, equity, cash
+  flow anual, ROE y LTV.
 - Vista de indice documental por inmueble con carpeta Drive, checklist y estados.
 - Pantalla de acciones para alta de inmuebles y registro de controles
   documentales con escritura en D1.
