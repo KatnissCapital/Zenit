@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type FormEvent, useEffect, useMemo, useState } from "react";
 
 type Property = {
   id: string;
@@ -640,6 +640,10 @@ export default function Home() {
   );
   const amount = (value: number) => euro.format(value);
   const rate = (value: number) => `${value}%`;
+  const shareOfValue = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : 0);
+  const cashflowCapture = (cashflowAnnual: number, monthlyRent: number) =>
+    monthlyRent > 0 ? (cashflowAnnual / (monthlyRent * 12)) * 100 : 0;
+  const roeAgainstTarget = (roe: number) => (roe / 10) * 100;
 
   const changeRole = (role: UserRole) => {
     setActiveRole(role);
@@ -1959,12 +1963,12 @@ export default function Home() {
                 <h3>Lectura financiera</h3>
               </div>
               <div className="finance-grid">
-                <FinanceItem label="Valor cartera" value={amount(totals.value)} detail={`${activePortfolio.length} activos`} />
-                <FinanceItem label="Deuda total" value={amount(totals.debt)} detail={`LTV ${rate(totals.ltv)}`} />
-                <FinanceItem label="Equity total" value={amount(totals.equity)} detail="Valor menos deuda" />
-                <FinanceItem label="Cash flow anual" value={amount(totals.cashflowAnnual)} detail="Rentas menos gastos y deuda" />
-                <FinanceItem label="ROE cartera" value={rate(totals.roe)} detail="Cash flow / equity" />
-                <FinanceItem label="LTV cartera" value={rate(totals.ltv)} detail="Deuda / valor" />
+                <FinanceItem label="Valor cartera" value={amount(totals.value)} detail={`${activePortfolio.length} activos`} progress={100} />
+                <FinanceItem label="Deuda total" value={amount(totals.debt)} detail={`LTV ${rate(totals.ltv)}`} progress={totals.ltv} />
+                <FinanceItem label="Equity total" value={amount(totals.equity)} detail="Valor menos deuda" progress={shareOfValue(totals.equity, totals.value)} />
+                <FinanceItem label="Cash flow anual" value={amount(totals.cashflowAnnual)} detail="Rentas menos gastos y deuda" progress={cashflowCapture(totals.cashflowAnnual, totals.rent)} />
+                <FinanceItem label="ROE cartera" value={rate(totals.roe)} detail="Cash flow / equity" progress={roeAgainstTarget(totals.roe)} />
+                <FinanceItem label="LTV cartera" value={rate(totals.ltv)} detail="Deuda / valor" progress={totals.ltv} />
               </div>
               <div className="finance-property-grid">
                 {activePortfolio.map((property) => (
@@ -1973,11 +1977,12 @@ export default function Home() {
                       <span>{property.id}</span>
                       <strong>{property.name}</strong>
                     </div>
-                    <FinanceItem label="Valor" value={amount(property.value)} detail="Actual estimado" />
-                    <FinanceItem label="Deuda" value={amount(property.debtBalance)} detail={`LTV ${rate(property.ltv)}`} />
-                    <FinanceItem label="Equity" value={amount(property.equity)} detail="Capital propio" />
-                    <FinanceItem label="Cash flow anual" value={amount(property.cashflowAnnual)} detail="Despues de gastos" />
-                    <FinanceItem label="ROE" value={rate(property.roe)} detail="Sobre equity" />
+                    <FinanceItem label="Valor" value={amount(property.value)} detail="Peso en cartera" progress={shareOfValue(property.value, totals.value)} />
+                    <FinanceItem label="Deuda" value={amount(property.debtBalance)} detail={`LTV ${rate(property.ltv)}`} progress={property.ltv} />
+                    <FinanceItem label="Equity" value={amount(property.equity)} detail="Capital propio" progress={shareOfValue(property.equity, property.value)} />
+                    <FinanceItem label="Cash flow anual" value={amount(property.cashflowAnnual)} detail="Despues de gastos" progress={cashflowCapture(property.cashflowAnnual, property.rent)} />
+                    <FinanceItem label="ROE" value={rate(property.roe)} detail="Sobre equity" progress={roeAgainstTarget(property.roe)} />
+                    <FinanceItem label="LTV" value={rate(property.ltv)} detail="Deuda / valor" progress={property.ltv} />
                   </article>
                 ))}
               </div>
@@ -2232,12 +2237,12 @@ export default function Home() {
                   <h3>Lectura financiera</h3>
                 </div>
                 <div className="finance-grid">
-                  <FinanceItem label="Valor cartera" value={amount(totals.value)} detail={`${activePortfolio.length} activos`} />
-                  <FinanceItem label="Deuda total" value={amount(totals.debt)} detail={`LTV ${rate(totals.ltv)}`} />
-                  <FinanceItem label="Equity total" value={amount(totals.equity)} detail="Valor menos deuda" />
-                  <FinanceItem label="Cash flow anual" value={amount(totals.cashflowAnnual)} detail="Rentas menos gastos y deuda" />
-                  <FinanceItem label="ROE cartera" value={rate(totals.roe)} detail="Cash flow / equity" />
-                  <FinanceItem label="LTV cartera" value={rate(totals.ltv)} detail="Deuda / valor" />
+                  <FinanceItem label="Valor cartera" value={amount(totals.value)} detail={`${activePortfolio.length} activos`} progress={100} />
+                  <FinanceItem label="Deuda total" value={amount(totals.debt)} detail={`LTV ${rate(totals.ltv)}`} progress={totals.ltv} />
+                  <FinanceItem label="Equity total" value={amount(totals.equity)} detail="Valor menos deuda" progress={shareOfValue(totals.equity, totals.value)} />
+                  <FinanceItem label="Cash flow anual" value={amount(totals.cashflowAnnual)} detail="Rentas menos gastos y deuda" progress={cashflowCapture(totals.cashflowAnnual, totals.rent)} />
+                  <FinanceItem label="ROE cartera" value={rate(totals.roe)} detail="Cash flow / equity" progress={roeAgainstTarget(totals.roe)} />
+                  <FinanceItem label="LTV cartera" value={rate(totals.ltv)} detail="Deuda / valor" progress={totals.ltv} />
                 </div>
                 <div className="finance-property-grid">
                   {activePortfolio.map((property) => (
@@ -2246,11 +2251,12 @@ export default function Home() {
                         <span>{property.id}</span>
                         <strong>{property.name}</strong>
                       </div>
-                      <FinanceItem label="Valor" value={amount(property.value)} detail="Actual estimado" />
-                      <FinanceItem label="Deuda" value={amount(property.debtBalance)} detail={`LTV ${rate(property.ltv)}`} />
-                      <FinanceItem label="Equity" value={amount(property.equity)} detail="Capital propio" />
-                      <FinanceItem label="Cash flow anual" value={amount(property.cashflowAnnual)} detail="Despues de gastos" />
-                      <FinanceItem label="ROE" value={rate(property.roe)} detail="Sobre equity" />
+                      <FinanceItem label="Valor" value={amount(property.value)} detail="Peso en cartera" progress={shareOfValue(property.value, totals.value)} />
+                      <FinanceItem label="Deuda" value={amount(property.debtBalance)} detail={`LTV ${rate(property.ltv)}`} progress={property.ltv} />
+                      <FinanceItem label="Equity" value={amount(property.equity)} detail="Capital propio" progress={shareOfValue(property.equity, property.value)} />
+                      <FinanceItem label="Cash flow anual" value={amount(property.cashflowAnnual)} detail="Despues de gastos" progress={cashflowCapture(property.cashflowAnnual, property.rent)} />
+                      <FinanceItem label="ROE" value={rate(property.roe)} detail="Sobre equity" progress={roeAgainstTarget(property.roe)} />
+                      <FinanceItem label="LTV" value={rate(property.ltv)} detail="Deuda / valor" progress={property.ltv} />
                     </article>
                   ))}
                 </div>
@@ -2543,12 +2549,30 @@ function Metric({ label, value, trend }: { label: string; value: string; trend: 
   );
 }
 
-function FinanceItem({ label, value, detail }: { label: string; value: string; detail: string }) {
+function FinanceItem({
+  label,
+  value,
+  detail,
+  progress = 0,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  progress?: number;
+}) {
+  const safeProgress = Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : 0));
+  const style = { "--finance-progress": `${safeProgress}%` } as CSSProperties;
+
   return (
     <div className="finance-item">
-      <span>{label}</span>
-      <strong className={isSensitiveDisplay(label, value) ? "sensitive-value" : undefined}>{value}</strong>
-      <small>{detail}</small>
+      <div className="finance-copy">
+        <span>{label}</span>
+        <strong className={isSensitiveDisplay(label, value) ? "sensitive-value" : undefined}>{value}</strong>
+        <small>{detail}</small>
+      </div>
+      <div className="finance-donut" style={style} aria-label={`${label}: ${Math.round(safeProgress)}%`}>
+        <span>{Math.round(safeProgress)}%</span>
+      </div>
     </div>
   );
 }

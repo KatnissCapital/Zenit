@@ -1531,7 +1531,7 @@ h3 {
 
 .finance-property-grid article {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) repeat(5, minmax(120px, 0.8fr));
+  grid-template-columns: minmax(160px, 1fr) repeat(6, minmax(112px, 0.8fr));
   gap: 8px;
   align-items: stretch;
   border-radius: 8px;
@@ -1559,9 +1559,17 @@ h3 {
 
 .finance-item {
   min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  align-items: center;
+  gap: 12px;
   padding: 14px;
   border-radius: 8px;
   background: #f5f7f3;
+}
+
+.finance-copy {
+  min-width: 0;
 }
 
 .finance-item strong {
@@ -1569,6 +1577,23 @@ h3 {
   margin: 8px 0 4px;
   overflow-wrap: anywhere;
   font-size: 18px;
+}
+
+.finance-donut {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, #f5f7f3 0 54%, transparent 55%),
+    conic-gradient(var(--green) 0 var(--finance-progress), #dfe7e1 var(--finance-progress) 100%);
+}
+
+.finance-donut span {
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--green);
 }
 
 .detail-top {
