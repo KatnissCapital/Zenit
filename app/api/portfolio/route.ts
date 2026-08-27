@@ -326,7 +326,9 @@ export async function POST(request: Request) {
       | { action: "createDocument"; payload: DocumentInput }
       | { action: "importProperties"; payload: { rows?: ImportPropertyInput[] } }
       | { action: "updateProperty"; payload: PropertyUpdateInput }
-      | { action: "deactivateProperty"; payload: { id?: string } };
+      | { action: "deactivateProperty"; payload: { id?: string } }
+      | { action: "deleteProperty"; payload: { id?: string } }
+      | { action: "deleteDemoData"; payload?: Record<string, never> };
 
     if (body.action === "createProperty") {
       const created = await createProperty(database, body.payload);
@@ -351,6 +353,16 @@ export async function POST(request: Request) {
     if (body.action === "deactivateProperty") {
       const deactivated = await deactivateProperty(database, body.payload.id);
       return json({ ...(await readPortfolio(database)), deactivated, persisted: true });
+    }
+
+    if (body.action === "deleteProperty") {
+      const deleted = await deleteProperty(database, body.payload.id);
+      return json({ ...(await readPortfolio(database)), deleted, persisted: true });
+    }
+
+    if (body.action === "deleteDemoData") {
+      const purged = await deleteDemoData(database);
+      return json({ ...(await readPortfolio(database)), purged, persisted: true });
     }
 
     return json({ error: "Accion no soportada." }, 400);
@@ -781,6 +793,70 @@ async function deactivateProperty(database: D1Database, idInput: string | undefi
   ]);
 
   return { id };
+}
+
+async function deleteProperty(database: D1Database, idInput: string | undefined) {
+  const id = sanitizeText(idInput, "");
+
+  if (!id) {
+    throw new Error("Inmueble no informado.");
+  }
+
+  const existing = await database
+    .prepare("SELECT id FROM properties WHERE id = ?")
+    .bind(id)
+    .first<{ id: string }>();
+
+  if (!existing) {
+    throw new Error("Inmueble no encontrado.");
+  }
+
+  await deletePropertyById(database, id);
+  return { id };
+}
+
+async function deleteDemoData(database: D1Database) {
+  const ids = seedProperties.map((property) => property.id);
+
+  for (const id of ids) {
+    const existing = await database
+      .prepare("SELECT id FROM properties WHERE id = ?")
+      .bind(id)
+      .first<{ id: string }>();
+
+    if (existing) {
+      await deletePropertyById(database, id);
+    }
+  }
+
+  return { count: ids.length };
+}
+
+async function deletePropertyById(database: D1Database, id: string) {
+  const documentRows = await database
+    .prepare("SELECT id FROM documents WHERE property_id = ?")
+    .bind(id)
+    .all<{ id: string }>();
+  const statements: D1PreparedStatement[] = [];
+
+  for (const document of documentRows.results ?? []) {
+    statements.push(
+      database
+        .prepare("DELETE FROM audit_log WHERE entity_type = ? AND entity_id = ?")
+        .bind("document", document.id),
+    );
+  }
+
+  await database.batch([
+    ...statements,
+    database.prepare("DELETE FROM documents WHERE property_id = ?").bind(id),
+    database.prepare("DELETE FROM alerts WHERE property_id = ?").bind(id),
+    database.prepare("DELETE FROM property_costs WHERE property_id = ?").bind(id),
+    database.prepare("DELETE FROM leases WHERE property_id = ?").bind(id),
+    database.prepare("DELETE FROM tenants WHERE id = ?").bind(`tenant-${id}`),
+    database.prepare("DELETE FROM audit_log WHERE entity_type = ? AND entity_id = ?").bind("property", id),
+    database.prepare("DELETE FROM properties WHERE id = ?").bind(id),
+  ]);
 }
 
 async function importProperties(database: D1Database, rows: ImportPropertyInput[]) {

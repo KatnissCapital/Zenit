@@ -1035,6 +1035,40 @@ h3 {
   white-space: nowrap;
 }
 
+.danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(179, 59, 85, 0.22);
+  border-radius: 8px;
+  background: var(--rose-soft);
+  padding: 13px;
+}
+
+.danger-zone strong {
+  display: block;
+  font-size: 14px;
+}
+
+.danger-zone p {
+  color: var(--rose);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.danger-zone button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--rose);
+  color: white;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 860;
+  white-space: nowrap;
+}
+
 .hero-copy h3 {
   max-width: 620px;
   margin-bottom: 10px;
@@ -1199,6 +1233,12 @@ h3 {
   border-color: rgba(179, 59, 85, 0.24);
   background: var(--rose-soft);
   color: var(--rose);
+}
+
+.property-actions .solid {
+  border-color: var(--rose);
+  background: var(--rose);
+  color: white;
 }
 
 .property-row:hover,
@@ -1693,6 +1733,7 @@ h3 {
   .settings-hero,
   .actions-hero,
   .import-hero,
+  .danger-zone,
   .role-list article,
   .storage-list article {
     align-items: stretch;

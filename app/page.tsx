@@ -96,6 +96,12 @@ type PortfolioResponse = {
   deactivated?: {
     id: string;
   };
+  deleted?: {
+    id: string;
+  };
+  purged?: {
+    count: number;
+  };
 };
 
 type UserRole = "Administrador" | "Gestor" | "Financiero" | "Auditor" | "Invitado";
@@ -780,6 +786,14 @@ export default function Home() {
   };
 
   const deactivateProperty = async (property: Property) => {
+    const confirmed = window.confirm(
+      `Dar de baja ${property.name} lo ocultara del listado operativo, pero conservara sus datos historicos.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -807,6 +821,90 @@ export default function Home() {
     } catch (error) {
       setSyncState("Demo sin conexion");
       setEditMessage(error instanceof Error ? error.message : "No se pudo dar de baja.");
+    }
+
+    setIsSaving(false);
+  };
+
+  const deleteProperty = async (property: Property) => {
+    const confirmed = window.confirm(
+      `Eliminar ${property.name} borrara el inmueble, sus documentos, costes y contrato. No se puede deshacer.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "deleteProperty", payload: { id: property.id } }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "No se pudo eliminar el inmueble.");
+      }
+
+      const data = (await response.json()) as PortfolioResponse;
+      const activeProperties = data.properties.filter((item) => item.status !== "Baja");
+
+      setPortfolio(data.properties);
+      setDocumentsByProperty(data.documentsByProperty);
+      setSelectedId(activeProperties[0]?.id ?? data.properties[0]?.id ?? properties[0].id);
+      setEditForm(emptyEditForm);
+      setSyncState("D1 activo");
+      setEditMessage(`${property.name} eliminado.`);
+      setActionLog((current) => [`Inmueble ${property.id} eliminado definitivamente.`, ...current]);
+    } catch (error) {
+      setSyncState("Demo sin conexion");
+      setEditMessage(error instanceof Error ? error.message : "No se pudo eliminar.");
+    }
+
+    setIsSaving(false);
+  };
+
+  const deleteDemoData = async () => {
+    const confirmed = window.confirm(
+      "Eliminar datos demo borrara los inmuebles de ejemplo iniciales y sus datos asociados. No afectara a inmuebles importados.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/portfolio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "deleteDemoData", payload: {} }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "No se pudieron eliminar los datos demo.");
+      }
+
+      const data = (await response.json()) as PortfolioResponse;
+      const activeProperties = data.properties.filter((item) => item.status !== "Baja");
+
+      setPortfolio(data.properties);
+      setDocumentsByProperty(data.documentsByProperty);
+      setSelectedId(activeProperties[0]?.id ?? data.properties[0]?.id ?? properties[0].id);
+      setEditForm(emptyEditForm);
+      setSyncState("D1 activo");
+      setActionLog((current) => ["Datos demo eliminados de D1.", ...current]);
+    } catch (error) {
+      setSyncState("Demo sin conexion");
+      setActionLog((current) => [
+        error instanceof Error ? error.message : "No se pudieron eliminar los datos demo.",
+        ...current,
+      ]);
     }
 
     setIsSaving(false);
@@ -1072,6 +1170,17 @@ export default function Home() {
                       </article>
                     ))}
                   </div>
+                  {!hideAmounts && (
+                    <div className="danger-zone">
+                      <div>
+                        <strong>Limpiar datos demo</strong>
+                        <p>Elimina solo los inmuebles de ejemplo iniciales y sus datos asociados.</p>
+                      </div>
+                      <button type="button" onClick={deleteDemoData} disabled={isSaving}>
+                        {isSaving ? "Eliminando..." : "Eliminar datos demo"}
+                      </button>
+                    </div>
+                  )}
                 </section>
               </div>
             </section>
@@ -1400,6 +1509,9 @@ export default function Home() {
                         </button>
                         <button type="button" className="danger" onClick={() => deactivateProperty(property)}>
                           Baja
+                        </button>
+                        <button type="button" className="danger solid" onClick={() => deleteProperty(property)}>
+                          Eliminar
                         </button>
                       </div>
                     )}
