@@ -85,6 +85,7 @@ type DocumentInput = {
   propertyId?: string;
   label?: string;
   detail?: string;
+  documentUrl?: string;
   status?: DocumentStatus;
 };
 
@@ -160,6 +161,7 @@ type DocumentRow = {
   category: string;
   title: string;
   status: DocumentStatus;
+  drive_url: string | null;
   extracted_json: string | null;
 };
 
@@ -752,7 +754,7 @@ async function readPortfolio(database: D1Database): Promise<Omit<PortfolioRespon
 
   const documentResult = await database
     .prepare(
-      `SELECT property_id, category, title, status, extracted_json
+      `SELECT property_id, category, title, status, drive_url, extracted_json
       FROM documents
       ORDER BY updated_at ASC`,
     )
@@ -765,7 +767,7 @@ async function readPortfolio(database: D1Database): Promise<Omit<PortfolioRespon
     documentsByProperty[document.property_id].push({
       label: document.title || document.category,
       status: document.status,
-      detail: readDocumentDetail(document.extracted_json),
+      detail: readDocumentDetail(document.extracted_json, document.drive_url),
     });
   }
 
@@ -865,7 +867,18 @@ async function createDocument(database: D1Database, input: DocumentInput) {
   const propertyId = sanitizeText(input.propertyId, "");
   const label = sanitizeText(input.label, "Documento");
   const status = input.status ?? "review";
-  const detail = sanitizeText(input.detail, "Pendiente de revisar metadatos");
+  const detail = sanitizeText(input.detail, "");
+  const documentUrl = sanitizeText(input.documentUrl, "");
+  const hasEvidence = Boolean(detail || documentUrl);
+
+  if (!hasEvidence) {
+    throw new Error("Informa un detalle o enlace al documento antes de guardar.");
+  }
+
+  if (status === "ok" && !documentUrl) {
+    throw new Error("Para marcar como completo hace falta enlace o ubicacion del documento.");
+  }
+
   const property = await database
     .prepare("SELECT id FROM properties WHERE id = ?")
     .bind(propertyId)
@@ -881,10 +894,19 @@ async function createDocument(database: D1Database, input: DocumentInput) {
     database
       .prepare(
         `INSERT INTO documents (
-          id, property_id, category, title, status, sensitive, extracted_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          id, property_id, category, title, drive_url, status, sensitive, extracted_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, propertyId, label, label, status, status === "locked" ? 1 : 0, JSON.stringify({ detail })),
+      .bind(
+        id,
+        propertyId,
+        label,
+        label,
+        documentUrl || null,
+        status,
+        status === "locked" ? 1 : 0,
+        JSON.stringify({ detail: detail || "Documento localizado", documentUrl }),
+      ),
     database
       .prepare(
         `INSERT INTO audit_log (id, entity_type, entity_id, action, changes_json)
@@ -913,7 +935,17 @@ async function createExpense(database: D1Database, input: ExpenseInput) {
   const total = Number(input.total ?? taxBase + vat - withholding);
   const category = sanitizeExpenseCategory(input.category);
   const status = sanitizeExpenseStatus(input.status);
+  const supplierName = sanitizeText(input.supplierName, "");
+  const concept = sanitizeText(input.concept, "");
   const id = `exp-${propertyId}-${crypto.randomUUID().slice(0, 8)}`;
+
+  if (!supplierName && !concept) {
+    throw new Error("Informa proveedor o concepto para identificar el gasto.");
+  }
+
+  if (total <= 0) {
+    throw new Error("Informa un importe de gasto mayor que cero.");
+  }
 
   await database.batch([
     database
@@ -930,9 +962,9 @@ async function createExpense(database: D1Database, input: ExpenseInput) {
         sanitizeDate(input.invoiceDate),
         input.paymentDate ? sanitizeDate(input.paymentDate) : null,
         category,
-        sanitizeText(input.supplierName, "Proveedor pendiente"),
+        supplierName || "Proveedor pendiente",
         sanitizeText(input.supplierTaxId, ""),
-        sanitizeText(input.concept, "Gasto sin concepto"),
+        concept || "Gasto sin concepto",
         toCents(taxBase),
         toCents(vat),
         toCents(withholding),
@@ -1332,27 +1364,27 @@ function importChecklist(row: ImportPropertyInput): DocumentRequirement[] {
     {
       label: "Seguro vivienda",
       status: Number(row.homeInsurance ?? 0) > 0 ? "review" : "pending",
-      detail: Number(row.homeInsurance ?? 0) > 0 ? "Importe anual informado" : "No informado en plantilla",
+      detail: Number(row.homeInsurance ?? 0) > 0 ? "Importe informado; falta validar documento" : "No informado en plantilla",
     },
     {
       label: "IBI",
       status: Number(row.ibi ?? 0) > 0 ? "review" : "pending",
-      detail: Number(row.ibi ?? 0) > 0 ? "Importe anual informado" : "No informado en plantilla",
+      detail: Number(row.ibi ?? 0) > 0 ? "Importe informado; falta validar recibo" : "No informado en plantilla",
     },
     {
       label: "Basuras",
       status: Number(row.wasteTax ?? 0) > 0 ? "review" : "pending",
-      detail: Number(row.wasteTax ?? 0) > 0 ? "Importe anual informado" : "No informado en plantilla",
+      detail: Number(row.wasteTax ?? 0) > 0 ? "Importe informado; falta validar tasa" : "No informado en plantilla",
     },
     {
       label: "Comunidad",
       status: Number(row.community ?? 0) > 0 ? "review" : "pending",
-      detail: Number(row.community ?? 0) > 0 ? "Importe anual informado" : "No informado en plantilla",
+      detail: Number(row.community ?? 0) > 0 ? "Importe informado; falta validar justificante" : "No informado en plantilla",
     },
     {
       label: "Seguro alquiler",
       status: Number(row.rentInsurance ?? 0) > 0 ? "review" : "pending",
-      detail: Number(row.rentInsurance ?? 0) > 0 ? "Importe anual informado" : "No consta o no aplica",
+      detail: Number(row.rentInsurance ?? 0) > 0 ? "Importe informado; falta validar poliza" : "No consta o no aplica",
     },
     {
       label: "Suministros",
@@ -1362,7 +1394,7 @@ function importChecklist(row: ImportPropertyInput): DocumentRequirement[] {
     {
       label: "Financiacion",
       status: Number(row.financing ?? 0) > 0 ? "locked" : "review",
-      detail: Number(row.financing ?? 0) > 0 ? "Importe anual informado" : "Sin financiacion informada",
+      detail: Number(row.financing ?? 0) > 0 ? "Importe informado; documento financiero sensible pendiente" : "Sin financiacion informada",
     },
   ];
 }
@@ -1439,16 +1471,18 @@ function mapExpense(row: ExpenseRow): Expense {
   };
 }
 
-function readDocumentDetail(value: string | null) {
+function readDocumentDetail(value: string | null, driveUrl?: string | null) {
   if (!value) {
-    return "Sin detalle";
+    return driveUrl ? `Evidencia: ${driveUrl}` : "Sin detalle";
   }
 
   try {
-    const parsed = JSON.parse(value) as { detail?: string };
-    return parsed.detail || "Sin detalle";
+    const parsed = JSON.parse(value) as { detail?: string; documentUrl?: string };
+    const detail = parsed.detail || "Sin detalle";
+    const evidence = parsed.documentUrl || driveUrl;
+    return evidence ? `${detail} · Evidencia: ${evidence}` : detail;
   } catch {
-    return "Sin detalle";
+    return driveUrl ? `Evidencia: ${driveUrl}` : "Sin detalle";
   }
 }
 

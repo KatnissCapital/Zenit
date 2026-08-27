@@ -58,6 +58,7 @@ type DocumentForm = {
   propertyId: string;
   label: string;
   detail: string;
+  documentUrl: string;
   status: DocumentStatus;
 };
 
@@ -504,9 +505,9 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeView, setActiveView] = useState("Dashboard");
   const [activeRole, setActiveRole] = useState<UserRole>("Administrador");
-  const [portfolio, setPortfolio] = useState<Property[]>(properties);
-  const [documentsByProperty, setDocumentsByProperty] = useState(documentRequirements);
-  const [expenses, setExpenses] = useState<Expense[]>(demoExpenses);
+  const [portfolio, setPortfolio] = useState<Property[]>([]);
+  const [documentsByProperty, setDocumentsByProperty] = useState<Record<string, DocumentRequirement[]>>({});
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [selectedId, setSelectedId] = useState(properties[0].id);
   const [propertyForm, setPropertyForm] = useState<PropertyForm>({
     name: "",
@@ -519,6 +520,7 @@ export default function Home() {
     propertyId: properties[0].id,
     label: "Seguro vivienda",
     detail: "",
+    documentUrl: "",
     status: "review",
   });
   const [actionLog, setActionLog] = useState<string[]>([
@@ -533,6 +535,7 @@ export default function Home() {
   const [editMessage, setEditMessage] = useState("Selecciona un inmueble para editarlo.");
   const [expenseForm, setExpenseForm] = useState<ExpenseForm>(emptyExpenseForm);
   const [expenseMessage, setExpenseMessage] = useState("Registra gastos reales y exportalos a Excel.");
+  const [isPortfolioLoading, setIsPortfolioLoading] = useState(false);
   const hideAmounts = activeRole === "Invitado";
   const visibleNavigation = hideAmounts
     ? navigation.filter((item) => item !== "Acciones" && item !== "Importacion" && item !== "Gastos")
@@ -648,6 +651,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!isAuthenticated) {
+      setIsPortfolioLoading(false);
       return;
     }
 
@@ -656,6 +660,7 @@ export default function Home() {
     async function loadPortfolio() {
       try {
         setSyncState("Cargando D1");
+        setIsPortfolioLoading(true);
         const response = await fetch("/api/portfolio", { cache: "no-store" });
 
         if (!response.ok) {
@@ -694,10 +699,17 @@ export default function Home() {
       } catch {
         if (!ignore) {
           setSyncState("Demo sin conexion");
+          setPortfolio(properties);
+          setDocumentsByProperty(documentRequirements);
+          setExpenses(demoExpenses);
           setActionLog((current) => [
             "No se pudo leer D1; se mantienen los datos demo de la sesion.",
             ...current,
           ]);
+        }
+      } finally {
+        if (!ignore) {
+          setIsPortfolioLoading(false);
         }
       }
     }
@@ -810,6 +822,18 @@ export default function Home() {
 
   const addDocument = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const hasEvidence = documentForm.detail.trim() || documentForm.documentUrl.trim();
+
+    if (!hasEvidence) {
+      setActionLog((current) => ["No se ha registrado el documento: falta detalle o enlace de evidencia.", ...current]);
+      return;
+    }
+
+    if (documentForm.status === "ok" && !documentForm.documentUrl.trim()) {
+      setActionLog((current) => ["Para marcar un documento como completo necesitas informar enlace o ubicacion del documento.", ...current]);
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -831,7 +855,7 @@ export default function Home() {
       if (data.created?.propertyId) {
         setSelectedId(data.created.propertyId);
       }
-      setDocumentForm((current) => ({ ...current, detail: "" }));
+      setDocumentForm((current) => ({ ...current, detail: "", documentUrl: "" }));
       setSyncState("D1 activo");
       setActionLog((current) => [
         `Documento "${data.created?.label ?? documentForm.label}" guardado en D1.`,
@@ -847,7 +871,9 @@ export default function Home() {
     const newDocument: DocumentRequirement = {
       label: documentForm.label || "Documento",
       status: documentForm.status,
-      detail: documentForm.detail || "Pendiente de revisar metadatos",
+      detail: documentForm.documentUrl
+        ? `${documentForm.detail || "Evidencia informada"} · ${documentForm.documentUrl}`
+        : documentForm.detail,
     };
 
     setDocumentsByProperty((current) => ({
@@ -855,7 +881,7 @@ export default function Home() {
       [targetId]: [...(current[targetId] ?? []), newDocument],
     }));
     setSelectedId(targetId);
-    setDocumentForm((current) => ({ ...current, detail: "" }));
+    setDocumentForm((current) => ({ ...current, detail: "", documentUrl: "" }));
     setActionLog((current) => [
       `Documento "${newDocument.label}" registrado para ${targetId}.`,
       ...current,
@@ -867,6 +893,21 @@ export default function Home() {
     event.preventDefault();
     const computedTotal = expenseForm.total || expenseForm.taxBase + expenseForm.vat - expenseForm.withholding;
     const payload = { ...expenseForm, total: computedTotal };
+
+    if (!payload.propertyId || !payload.invoiceDate || !payload.category) {
+      setExpenseMessage("Selecciona inmueble, fecha y categoria antes de guardar.");
+      return;
+    }
+
+    if (!payload.supplierName.trim() && !payload.concept.trim()) {
+      setExpenseMessage("Informa al menos proveedor o concepto para identificar el gasto.");
+      return;
+    }
+
+    if (computedTotal <= 0) {
+      setExpenseMessage("Informa un importe mayor que cero antes de guardar.");
+      return;
+    }
 
     setIsSaving(true);
 
@@ -1187,38 +1228,24 @@ export default function Home() {
             </div>
 
             <div className="login-copy">
-              <span className="security-pill">Demo protegida</span>
-              <h2>Accede a tu cartera inmobiliaria con control documental.</h2>
+              <span className="security-pill">Acceso privado</span>
+              <h2>Katniss Real Estate</h2>
               <p>
-                El siguiente paso separa la demo publica de los expedientes: contratos,
-                seguros, IBI, financiacion y documentos de Drive quedan dentro del area
-                privada.
+                Gestiona tu cartera inmobiliaria con control documental, financiero y fiscal
+                desde un entorno privado.
               </p>
             </div>
 
-            <div className="login-checks">
-              <span>Drive vinculado</span>
-              <span>Documentos sensibles aislados</span>
-              <span>Preparado para usuarios y roles</span>
-            </div>
-
-            <button className="login-button" onClick={() => setIsAuthenticated(true)}>
-              Entrar a la demo
+            <button
+              className="login-button"
+              onClick={() => {
+                setIsPortfolioLoading(true);
+                setIsAuthenticated(true);
+              }}
+            >
+              Entrar
             </button>
           </div>
-
-          <aside className="login-preview">
-            <div>
-              <p className="eyebrow">Vista privada</p>
-              <h3>Dashboard, inmuebles e indice documental.</h3>
-            </div>
-            <div className="login-preview-grid">
-              <Metric label="Valor cartera" value={euro.format(totals.value)} trend="Privado" />
-              <Metric label="Docs sensibles" value={`${documentTotals.locked}`} trend="Login" />
-              <Metric label="Pendientes" value={`${documentTotals.pending}`} trend="Accion" />
-              <Metric label="Costes anuales" value={euro.format(totals.annualCosts)} trend="Control" />
-            </div>
-          </aside>
         </section>
       ) : (
       <>
@@ -1257,7 +1284,7 @@ export default function Home() {
         <section className="workspace">
           <header className="topbar">
             <div>
-              <p className="eyebrow">Demo funcional</p>
+              <p className="eyebrow">Cartera privada</p>
               <h2>{activeView}</h2>
             </div>
             <div className="topbar-actions">
@@ -1293,6 +1320,13 @@ export default function Home() {
             </div>
           </header>
 
+          {isPortfolioLoading ? (
+            <section className="loading-panel" aria-live="polite">
+              <p className="eyebrow">Cargando cartera</p>
+              <h3>Preparando tus inmuebles y documentos.</h3>
+            </section>
+          ) : (
+          <>
           {activeView === "Dashboard" && (
           <section className="hero-band" aria-label="Resumen de cartera">
             <div className="hero-copy">
@@ -1876,13 +1910,24 @@ export default function Home() {
                   </label>
 
                   <label>
-                    <span>Detalle</span>
+                    <span>Detalle / observacion</span>
                     <input
                       value={documentForm.detail}
                       onChange={(event) =>
                         setDocumentForm((current) => ({ ...current, detail: event.target.value }))
                       }
-                      placeholder="Poliza 2026 cargada en Drive"
+                      placeholder="Dato informado, pendiente de validar, observacion..."
+                    />
+                  </label>
+
+                  <label>
+                    <span>Enlace o ubicacion del documento</span>
+                    <input
+                      value={documentForm.documentUrl}
+                      onChange={(event) =>
+                        setDocumentForm((current) => ({ ...current, documentUrl: event.target.value }))
+                      }
+                      placeholder="Drive / Inmueble / Documentos / archivo.pdf"
                     />
                   </label>
 
@@ -1946,11 +1991,6 @@ export default function Home() {
                 <div>
                   <p className="eyebrow">Gestion diaria</p>
                   <h3>Inmuebles</h3>
-                </div>
-                <div className="segmented" role="tablist" aria-label="Filtro de inmuebles">
-                  <button className="selected">Todos</button>
-                  <button>Revisar</button>
-                  <button>Vacantes</button>
                 </div>
               </section>
 
@@ -2325,6 +2365,8 @@ export default function Home() {
             </aside>
             )}
           </section>
+          )}
+          </>
           )}
         </section>
       </div>
